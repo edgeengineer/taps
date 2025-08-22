@@ -1,0 +1,70 @@
+sequenceDiagram
+    participant App as Application
+    participant Conn as Connection(s)
+    participant Trans as Transport Services API
+    participant Frame as Framer(s)
+    participant Impl as Transport System Implementation
+    participant Cache as Cached State
+    participant Policy as System Policy
+    participant Proto as Protocol Stack(s)
+    participant Net as Network-Layer Interface
+
+    Note over App,Net: Pre-establishment Phase
+    App->>Trans: Initialize Transport Services
+    Trans->>Impl: Start Candidate Gathering
+    Impl->>Policy: Check System Policy
+    Policy-->>Impl: Policy Rules
+    Impl->>Cache: Load Cached State
+    Cache-->>Impl: Previous Connection Data
+    Impl->>Proto: Initialize Protocol Stack
+    Proto->>Net: Network Interface Setup
+
+    Note over App,Net: Establishment Phase
+    App->>Conn: Request Connection
+    Conn->>Trans: Establishment Request
+    Trans->>Frame: Setup Framing
+    Frame->>Impl: Connection Parameters
+    Impl->>Proto: Start Candidate Racing
+    Proto->>Net: Send Connection Attempts
+    Net-->>Proto: Network Response
+    Proto-->>Impl: Connection Results
+    Impl->>Cache: Update State
+    Impl-->>Trans: Connection Established
+    Trans-->>Conn: Connection Ready
+    Conn-->>App: Connection Established
+
+    Note over App,Net: Data Transfer Phase
+    App->>Conn: Send Data
+    Conn->>Trans: Data Transfer Request
+    Trans->>Frame: Frame Data
+    Frame->>Impl: Framed Packets
+    Impl->>Proto: Protocol Processing
+    Proto->>Net: Send Network Packets
+    Net-->>Proto: Receive Network Packets
+    Proto-->>Impl: Process Received Data
+    Impl->>Cache: Update Connection State
+    Impl-->>Frame: Deliver Data
+    Frame-->>Trans: Unframe Data
+    Trans-->>Conn: Data Ready
+    Conn->>App: Receive Data
+
+    Note over App,Net: Event Handling
+    Proto->>Impl: Network Events
+    Impl->>Cache: Update State
+    Impl->>Trans: Transport Events
+    Trans->>Conn: Connection Events
+    Conn->>App: Application Events
+
+    Note over App,Net: Termination Phase
+    App->>Conn: Close Connection
+    Conn->>Trans: Termination Request
+    Trans->>Frame: Finalize Framing
+    Frame->>Impl: Close Signal
+    Impl->>Proto: Protocol Shutdown
+    Proto->>Net: Send Close Packets
+    Impl->>Cache: Final State Update
+    Net-->>Proto: Close Acknowledgment
+    Proto-->>Impl: Shutdown Complete
+    Impl-->>Trans: Connection Closed
+    Trans-->>Conn: Closed
+    Conn-->>App: Connection Terminated

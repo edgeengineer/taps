@@ -1,0 +1,74 @@
+sequenceDiagram
+    %%{init: {'theme':'base', 'themeVariables': {'primaryTextColor': '#000000'}}}%%
+    title Figure 4: The Lifetime of a Connection Object
+    participant App as Application
+    participant Pre as Preconnection
+    participant Conn as Connection
+    participant List as Listener
+    participant Remote as Remote Endpoint
+
+    Note over App,Remote: Preestablishment Phase
+    Note over Pre: Configuration:
+    Note over Pre: + Local Endpoint
+    Note over Pre: + Remote Endpoint  
+    Note over Pre: + Transport Properties
+    Note over Pre: + Security Parameters
+
+    rect rgb(240, 248, 255)
+        Note over App,Remote: Active Connection Path
+        App->>Pre: Create Preconnection
+        App->>Pre: Configure Properties
+        
+        alt InitiateWithSend()
+            App->>Pre: InitiateWithSend(data)
+            Pre->>Conn: Establish Connection
+            Pre->>Remote: Send Initial Data
+            Remote-->>Conn: Connection Response
+            Conn-->>App: Connection Ready
+        else Initiate()
+            App->>Pre: Initiate()
+            Pre->>Conn: Establish Connection
+            Pre->>Remote: Connection Request
+            Remote-->>Conn: Connection Response  
+            Conn-->>App: Connection Ready
+        end
+    end
+
+    rect rgb(255, 248, 240)
+        Note over App,Remote: Passive Connection Path (Listen)
+        App->>List: Listen()
+        List->>List: Wait for Connections
+        Remote->>List: Connection Request
+        List->>Conn: Create Connection
+        List-->>App: Connection Received
+        App->>Conn: Accept Connection
+        Conn-->>Remote: Connection Accepted
+    end
+
+    rect rgb(240, 255, 240)
+        Note over App,Remote: Rendezvous Path
+        App->>Pre: Rendezvous()
+        Pre->>Remote: Rendezvous Request
+        Remote->>Pre: Rendezvous Response
+        Pre->>Conn: Establish Connection
+        Conn-->>App: Connection Ready
+    end
+
+    Note over App,Remote: Established Phase
+    loop Data Transfer
+        App->>Conn: Send(data)
+        Conn->>Remote: Data Packet
+        Remote->>Conn: Receive Data
+        Conn->>App: Receive(data)
+    end
+
+    Note over App,Remote: Termination Phase
+    alt Graceful Close
+        App->>Conn: Close()
+        Conn->>Remote: Close Request
+        Remote-->>Conn: Close Acknowledgment
+        Conn->>Conn: State: Closed
+    else Abrupt Termination
+        App->>Conn: Abort()
+        Conn->>Conn: State: Closed
+    end
