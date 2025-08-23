@@ -20,22 +20,15 @@ public actor TAPS: ServiceDiscovery {
     
     /// Run TAPS as a service (required by RFC)
     public func run() async throws {
+        precondition(!isRunning, "TAPS service already running")
         logger.info("Starting TAPS service")
         isRunning = true
+        defer { shutdown() }
         
-        // Keep service running until cancelled
-        try await withTaskCancellationHandler {
-            // Service event loop
-            while !Task.isCancelled && isRunning {
-                try await Task.sleep(for: .milliseconds(100))
-            }
-        } onCancel: {
-            // Cannot mutate actor state from Sendable closure
-            // Will be handled by cancellation check in loop
+        // Service event loop
+        while isRunning {
+            try await Task.sleep(for: .milliseconds(100))
         }
-        
-        // Clean shutdown
-        shutdown()
     }
     
     /// Generic withConnection method with default parameters
@@ -43,7 +36,6 @@ public actor TAPS: ServiceDiscovery {
         to service: Service,
         _ operation: @Sendable @escaping (Service.Client) async throws -> T
     ) async throws -> T where Service.Parameters: ServiceParametersWithDefault {
-        
         return try await withConnection(
             to: service,
             parameters: Service.Parameters.defaultParameters,
@@ -57,35 +49,10 @@ public actor TAPS: ServiceDiscovery {
         parameters: Service.Parameters,
         _ operation: @Sendable @escaping (Service.Client) async throws -> T
     ) async throws -> T {
-        
-        guard isRunning else {
-            throw TAPSError.serviceUnavailable("TAPS service not running")
-        }
-        
-        return try await withThrowingTaskGroup(of: T.self) { group in
-            // Track connection
-            let connectionId = trackConnection()
-            
-            // Create client through service
-            let client = try await service.makeClient(parameters: parameters)
-            
-            // Add main task
-            group.addTask { @Sendable in
-                // Execute operation
-                return try await operation(client)
-            }
-            
-            // Get result
-            guard let result = try await group.next() else {
-                throw TAPSError.connectionFailed("Failed to execute connection operation")
-            }
-            
-            // Cleanup after successful operation
-            removeConnection(connectionId)
-            try? await client.close()
-            
-            return result
-        }
+        return try await service.withConnection(
+            parameters: parameters,
+            perform: operation
+        )
     }
     
     // MARK: - Server Support (future)
@@ -96,7 +63,6 @@ public actor TAPS: ServiceDiscovery {
         parameters: Service.Parameters,
         acceptClient: @Sendable @escaping (Service.Server) async throws -> T
     ) async throws -> T where Service.Parameters: ServerServiceParametersWithDefault {
-        
         // Future implementation for server support
         throw TAPSError.serviceUnavailable("Server support not implemented yet")
     }

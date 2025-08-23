@@ -6,10 +6,13 @@ import AsyncAlgorithms
 /// Base protocol for client services
 public protocol ClientServiceProtocol: Sendable {
     associatedtype Parameters: Sendable
-    associatedtype Client: ClientConnectionProtocol
+    associatedtype Client: ClientConnection
     
     /// Create connection with given parameters
-    func makeClient(parameters: Parameters) async throws -> Client
+    func withConnection<T: Sendable>(
+        parameters: Parameters,
+        perform: @escaping @Sendable (Client) async throws -> T
+    ) async throws -> T
 }
 
 /// Parameters with default values
@@ -31,3 +34,10 @@ public protocol ServerServiceParametersWithDefault: Sendable {
     static var defaultParameters: Self { get }
 }
 
+#if canImport(NIOCore)
+import NIOCore
+public typealias NetworkBytes = ByteBuffer
+#elseif canImport(Network)
+import Foundation
+public typealias NetworkBytes = Data
+#endif

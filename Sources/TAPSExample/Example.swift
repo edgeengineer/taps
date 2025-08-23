@@ -38,8 +38,7 @@ struct GlobalOptions: ParsableArguments {
     var config: String?
 }
 
-// MARK: - Корневая команда
-@available(macOS 15.0, *)
+@main
 struct TAPSExample: AsyncParsableCommand {
     static let configuration = CommandConfiguration(
         abstract: "TAPS TCP/HTTP test client",
@@ -148,50 +147,29 @@ func runTAPSExample(subCmd: any SubCommandProtocol) async throws {
     // Start TAPS service
     async let _: Void = taps.run()
     
-    // Give TAPS a moment to start
-    try await Task.sleep(for: .milliseconds(100))
-    
-    // Test TCP connection
-    let tcpService = TCPService(host: host, port: port)
     try await taps.withConnection(
-        to: tcpService
-    ) { (tcpClient: TCPClient) -> Void in
+        to: .tcp(host: host, port: port)
+    ) { tcpClient -> Void in
+        logger.info("Connection is ready", metadata: [
+            "host": "\(host)",
+            "port": "\(port)"
+        ])
         
-        // Check if connection is ready (it should be after makeClient)
-        let currentState = await tcpClient.state
-        guard currentState == .ready else {
-            logger.error("Connection not ready", metadata: ["state": .string("\(currentState)")])
-            throw TAPSError.connectionFailed("Connection not in ready state: \(currentState)")
-        }
-        
-        logger.info("Connection is ready")
-        print("Connected to \(host):\(port)")
-        
-        // Send test message
-        logger.info("Sending message", metadata: ["content": .string(message)])
         try await tcpClient.send(message)
 
         logger.info("Waiting for \(cmdDesc) response")
         
-        // Get inbound channel from actor
-        let inboundChannel = await tcpClient.inbound
-        
         // Process response
-        for try await response in inboundChannel {
-            if let text = String(bytes: response.content, encoding: .utf8) {
-                logger.info("Response received", metadata: [
-                    "bytes": .stringConvertible(response.content.count),
-                    "preview": .string(text.count > 200 ? String(text.prefix(200)) + "..." : text)
-                ])
-            } else {
-                logger.info("Binary response received", metadata: [
-                    "bytes": .stringConvertible(response.content.count)
-                ])
-            }
+        for try await response in tcpClient.inbound {
+            let text = String(buffer: response)
+            logger.info("Response received", metadata: [
+                "bytes": .stringConvertible(text.count),
+                "preview": .string(text.count > 200 ? String(text.prefix(200)) + "..." : text)
+            ])
             
             if verbose {
                 logger.debug("Full response details", metadata: [
-                    "totalBytes": .stringConvertible(response.content.count)
+                    "totalBytes": .stringConvertible(response.readableBytes)
                 ])
             }
             break
@@ -202,21 +180,3 @@ func runTAPSExample(subCmd: any SubCommandProtocol) async throws {
     
     logger.info("TAPS Example finished")
 }
-
-// Entry point 1
-//try await runTAPSExample()
-
-// Entry point 2
-//TAPSExample.main()
-if #available(macOS 15.0, *) {
-    Task {
-        await TAPSExample.main()
-        exit(0)
-    }
-    RunLoop.main.run()
-}else {
-    print("This example requires macOS 15.0 or later")
-}
-
-
-

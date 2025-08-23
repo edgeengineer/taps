@@ -3,7 +3,7 @@
 import Foundation
 
 /// TCP service implementing ClientServiceProtocol
-public struct TCPService: ClientServiceProtocol {
+public struct TCPClientService: ClientServiceProtocol {
     public typealias Parameters = TCPParameters
     public typealias Client = TCPClient
     
@@ -16,22 +16,27 @@ public struct TCPService: ClientServiceProtocol {
     }
     
     /// Create TCP client with given parameters
-    public func makeClient(parameters: TCPParameters) async throws -> TCPClient {
-        let endpoint = EndpointIdentifier(host: host, port: port)
-        let client = TCPClient(endpoint: endpoint, parameters: parameters)
-        try await client.connect()
-        return client
+    public func withConnection<T: Sendable>(
+        parameters: Parameters,
+        perform: @escaping @Sendable (Client) async throws -> T
+    ) async throws -> T {
+        return try await TCPClient.withConnection(
+            host: host,
+            port: port,
+            parameters: parameters,
+            perform: perform
+        )
     }
 }
 
 /// TCP service parameters
 public struct TCPParameters: ServiceParametersWithDefault {
-    public var connectionTimeout: TimeInterval
+    public var connectionTimeout: Duration
     public var keepAlive: Bool
     public var noDelay: Bool
     
     public init(
-        connectionTimeout: TimeInterval = 30.0,
+        connectionTimeout: Duration = .seconds(30),
         keepAlive: Bool = false,
         noDelay: Bool = true
     ) {
@@ -42,5 +47,11 @@ public struct TCPParameters: ServiceParametersWithDefault {
     
     public static var defaultParameters: TCPParameters {
         return TCPParameters()
+    }
+}
+
+extension ClientServiceProtocol where Self == TCPClientService {
+    public static func tcp(host: String, port: Int) -> TCPClientService {
+        TCPClientService(host: host, port: port)
     }
 }
