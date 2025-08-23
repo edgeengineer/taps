@@ -7,8 +7,8 @@ let package = Package(
     name: "TAPS",
     platforms: [
         .macOS(.v15),
-        .iOS(.v17),
-        .tvOS(.v17),
+        .iOS(.v18),
+        .tvOS(.v18),
         .watchOS(.v10),
         .visionOS(.v1)
     ],
