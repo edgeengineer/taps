@@ -38,30 +38,91 @@ public actor TCPServer {
         // Use withThrowingDiscardingTaskGroup for structured concurrency as requested
         return try await withThrowingDiscardingTaskGroup { group in
             
-            // Server accepting task
-            group.addTask {
-                defer {
-                    logger.info("TCP server shutting down")
-                    Task {
-                        try? await serverChannel.close().get()
+            // Create async sequence for server accepts
+            let serverSequence = AsyncServerSequence(serverChannel: serverChannel, logger: logger)
+            
+            // Server accepting task - handle all client connections
+            group.addTask { @Sendable in
+                do {
+                    // Accept connections and handle each client
+                    for try await clientChannel in serverSequence {
+                        // Create a new task group for each client to avoid capturing 'group'
+                        Task { @Sendable in
+                            do {
+                                let asyncClientChannel = try NIOAsyncChannel<ByteBuffer, ByteBuffer>(
+                                    wrappingChannelSynchronously: clientChannel
+                                )
+                                
+                                try await asyncClientChannel.executeThenClose { inbound, outbound in
+                                    let client = TCPClient(inbound: inbound, outbound: outbound)
+                                    _ = try await acceptClient(client)
+                                }
+                            } catch {
+                                logger.error("Error handling client", metadata: [
+                                    "error": .string(String(describing: error))
+                                ])
+                            }
+                        }
                     }
-                }
-                
-                // This is a placeholder - actual NIO server async implementation needed
-                // For now, simulate server running
-                while !Task.isCancelled {
-                    try await Task.sleep(for: .seconds(1))
-                    // TODO: Implement real async server accept loop with SwiftNIO
-                    // This requires proper NIOAsyncServerChannel support
-                    
-                    // Placeholder: create a mock client for testing
-                    // In real implementation, this would be from serverChannel.accept()
+                } catch {
+                    logger.error("Server accept loop failed", metadata: [
+                        "error": .string(String(describing: error))
+                    ])
                 }
             }
             
-            // Wait for cancellation - use a very long duration instead
-            try await Task.sleep(for: .seconds(365 * 24 * 3600)) // 1 year
+            // The server runs until cancelled - this will complete when TaskGroup is cancelled
+            try await Task.sleep(until: .now.advanced(by: .seconds(365 * 24 * 3600)), clock: .continuous)
             return () as! T
+        }
+    }
+}
+
+// MARK: - AsyncServerSequence
+
+/// Simplified async sequence for TCP server (placeholder implementation)
+/// 
+/// NOTE: This is a simplified implementation. A production-ready version would require
+/// deeper integration with NIO's ServerBootstrap and EventLoop mechanisms.
+@available(macOS 15.0, *)
+internal struct AsyncServerSequence: AsyncSequence {
+    typealias Element = Channel
+    
+    private let serverChannel: Channel
+    private let logger: Logger
+    
+    init(serverChannel: Channel, logger: Logger) {
+        self.serverChannel = serverChannel
+        self.logger = logger
+    }
+    
+    func makeAsyncIterator() -> AsyncIterator {
+        AsyncIterator(serverChannel: serverChannel, logger: logger)
+    }
+    
+    struct AsyncIterator: AsyncIteratorProtocol {
+        private let serverChannel: Channel
+        private let logger: Logger
+        private var isFinished = false
+        
+        init(serverChannel: Channel, logger: Logger) {
+            self.serverChannel = serverChannel
+            self.logger = logger
+        }
+        
+        mutating func next() async throws -> Channel? {
+            // This is a placeholder implementation
+            // In a real implementation, this would integrate with NIO's server accept mechanism
+            
+            guard !isFinished else { return nil }
+            
+            logger.debug("TCP server async sequence - placeholder implementation")
+            
+            // For now, this will never actually accept connections
+            // Real implementation would need NIO ServerBootstrap with async support
+            isFinished = true
+            
+            throw TAPSError.serviceUnavailable("TCP Server async accept not yet fully implemented. Requires deeper NIO integration.")
         }
     }
 }

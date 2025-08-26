@@ -36,12 +36,13 @@ public actor TAPS: ServiceDiscovery {
     /// Generic withConnection method with default parameters
     public func withConnection<Service: ClientServiceProtocol, T: Sendable>(
         to service: Service,
+        parameters: Service.Parameters = .defaultParameters,
         _ operation: @Sendable @escaping (Service.Client) async throws -> T
-    ) async throws -> T where Service.Parameters: ServiceParametersWithDefault {
-        return try await withConnection(
-            to: service,
-            parameters: Service.Parameters.defaultParameters,
-            operation
+    ) async throws -> T where Service.Parameters: ClientServiceParametersWithDefaults {
+        return try await service.withConnection(
+            context: TAPSContext(),
+            parameters: parameters,
+            perform: operation
         )
     }
     
@@ -101,12 +102,12 @@ extension TAPS {
     public func withServer<Service: ServerServiceProtocol, T: Sendable>(
         context: TAPSContext,
         on service: Service,
+        parameters: Service.Parameters = .defaultParameters,
         acceptClient: @escaping @Sendable (Service.Client) async throws -> T
-    ) async throws -> T where Service.Parameters: ServerServiceParametersWithDefault {
-        return try await withServer(
+    ) async throws -> T where Service.Parameters: ServerServiceParametersWithDefaults {
+        return try await service.withServer(
             context: context,
-            on: service,
-            parameters: Service.Parameters.defaultParameters,
+            parameters: parameters,
             acceptClient: acceptClient
         )
     }

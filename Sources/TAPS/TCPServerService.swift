@@ -5,7 +5,7 @@ import Foundation
 
 /// TCP server service implementing ServerServiceProtocol
 @available(macOS 15.0, *)
-public actor TCPServerService: ServerServiceProtocol {
+public actor TCPServerService: ServerServiceProtocol, ServiceWithDefaults {
     public typealias Parameters = TCPServerParameters
     public typealias Client = TCPClient
     
@@ -27,6 +27,11 @@ public actor TCPServerService: ServerServiceProtocol {
             acceptClient: acceptClient
         )
     }
+    
+    // MARK: - ServiceWithDefaults
+    public static var defaultParameters: TCPServerParameters {
+        return TCPServerParameters.defaultParameters
+    }
 }
 
 extension ServerServiceProtocol where Self == TCPServerService {
@@ -36,7 +41,7 @@ extension ServerServiceProtocol where Self == TCPServerService {
 }
 
 /// TCP server service parameters
-public struct TCPServerParameters: ServerServiceParametersWithDefault {
+public struct TCPServerParameters: ServerServiceParametersWithDefaults {
     public var port: Int
     public var backlog: Int
     public var reuseAddress: Bool

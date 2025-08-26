@@ -3,7 +3,7 @@
 import Foundation
 
 /// TCP service implementing ClientServiceProtocol
-public struct TCPClientService: ClientServiceProtocol {
+public struct TCPClientService: ClientServiceProtocol, ServiceWithDefaults {
     public typealias Parameters = TCPClientParameters
     public typealias Client = TCPClient
     
@@ -29,6 +29,11 @@ public struct TCPClientService: ClientServiceProtocol {
             perform: perform
         )
     }
+    
+    // MARK: - ServiceWithDefaults
+    public static var defaultParameters: TCPClientParameters {
+        return TCPClientParameters.defaultParameters
+    }
 }
 
 extension ClientServiceProtocol where Self == TCPClientService {
@@ -38,7 +43,7 @@ extension ClientServiceProtocol where Self == TCPClientService {
 }
 
 /// TCP Client service parameters
-public struct TCPClientParameters: ServiceParametersWithDefault {
+public struct TCPClientParameters: ClientServiceParametersWithDefaults {
     public var connectionTimeout: Duration
     public var keepAlive: Bool
     public var noDelay: Bool
