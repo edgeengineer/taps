@@ -73,6 +73,10 @@
             argument = "http"
             isEnabled = "NO">
          </CommandLineArgument>
+         <CommandLineArgument
+            argument = "tls"
+            isEnabled = "YES">
+         </CommandLineArgument>
       </CommandLineArguments>
    </LaunchAction>
    <ProfileAction

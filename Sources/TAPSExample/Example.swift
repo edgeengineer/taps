@@ -3,7 +3,7 @@ import ArgumentParser
 import TAPS
 import Logging
 
-// MARK: - Конфигурация
+// MARK: - Configuration
 struct TAPSConfig: Codable {
     struct Service: Codable {
         var host: String
@@ -11,6 +11,7 @@ struct TAPSConfig: Codable {
     }
     var tcp: Service?
     var http: Service?
+    var tls: Service?
     var verbose: Bool?
     
     static func load(from path: String?) -> TAPSConfig {
@@ -29,7 +30,7 @@ struct TAPSConfig: Codable {
     }
 }
 
-// MARK: - Глобальные опции
+// MARK: - Global Options
 struct GlobalOptions: ParsableArguments {
     @Flag(name: .shortAndLong, help: "Enable verbose output")
     var verbose: Bool = false
@@ -41,8 +42,8 @@ struct GlobalOptions: ParsableArguments {
 @main
 struct TAPSExample: AsyncParsableCommand {
     static let configuration = CommandConfiguration(
-        abstract: "TAPS TCP/HTTP test client",
-        subcommands: [TCP.self, HTTP.self],
+        abstract: "TAPS TCP/HTTP/TLS test client",
+        subcommands: [TCP.self, HTTP.self, TLS.self],
         defaultSubcommand: TCP.self
     )
 }
@@ -54,7 +55,7 @@ protocol SubCommandProtocol: Sendable {
     var message: String { get }
 }
 
-// MARK: - Подкоманда TCP
+// MARK: - TCP Subcommand
 struct TCP: AsyncParsableCommand, SubCommandProtocol {
     static let configuration = CommandConfiguration(
         abstract: "Run a TCP test"
@@ -86,7 +87,7 @@ struct TCP: AsyncParsableCommand, SubCommandProtocol {
     }
 }
 
-// MARK: - Подкоманда HTTP
+// MARK: - HTTP Subcommand
 struct HTTP: AsyncParsableCommand, SubCommandProtocol {
     static let configuration = CommandConfiguration(
         abstract: "Run an HTTP test"
@@ -117,6 +118,39 @@ struct HTTP: AsyncParsableCommand, SubCommandProtocol {
         port = resolvedPort
         
         try await runTCPClient(subCmd: self)
+    }
+}
+
+// MARK: - TLS Subcommand
+struct TLS: AsyncParsableCommand, SubCommandProtocol {
+    static let configuration = CommandConfiguration(
+        abstract: "Run a TLS test"
+    )
+    
+    @Option(name: .shortAndLong, help: "Host to connect")
+    var host: String?
+    
+    @Option(name: .shortAndLong, help: "Port to connect")
+    var port: Int?
+    
+    @OptionGroup var global: GlobalOptions
+    
+    @Option(name: .shortAndLong, help: "Message to send")
+    var message: String = "Hello from TLS TAPS!\n"
+    
+    mutating func run() async throws {
+        let cfg = TAPSConfig.load(from: global.config)
+        
+        let resolvedHost = host ?? cfg.tls?.host ?? "tcpbin.com"
+        let resolvedPort = port ?? cfg.tls?.port ?? 4243
+        let verbose = global.verbose || (cfg.verbose ?? false)
+        
+        if verbose {
+            print("[Verbose] TLS → host=\(resolvedHost), port=\(resolvedPort), config=\(global.config ?? "~/.tapsconfig.json")")
+        }
+        host = resolvedHost
+        port = resolvedPort
+        try await runTLSClient(subCmd: self)
     }
 }
 
@@ -184,6 +218,72 @@ func runTCPClient(subCmd: any SubCommandProtocol) async throws {
     }
     
     logger.info("TAPS Example finished")
+}
+
+@available(macOS 15.0, *)
+func runTLSClient(subCmd: any SubCommandProtocol) async throws {
+    let cmdDesc = String(describing: type(of: subCmd))
+    let host = subCmd.host ?? "tcpbin.com"
+    let port = subCmd.port ?? 4243
+    let verbose = subCmd.global.verbose
+    let message = subCmd.message
+    
+    // Configure logging system based on verbose flag
+    LoggingSystem.bootstrap { label in
+        var handler = StreamLogHandler.standardOutput(label: label)
+        handler.logLevel = verbose ? .trace : .info
+        return handler
+    }
+    
+    let logger = Logger(label: "engineer.edge.taps.cli")
+    logger.info("Starting TAPS \(cmdDesc) Example", metadata: [
+        "host": .string(host),
+        "port": .stringConvertible(port),
+        "command": .string(cmdDesc)
+    ])
+    
+    let taps = TAPS()
+    
+    // Start TAPS service
+    async let _: Void = taps.run()
+    
+    try await taps.withConnection(
+        to: .tls(host: host, port: port)
+    ) { tlsClient -> Void in
+        logger.info("TLS Connection is ready", metadata: [
+            "host": "\(host)",
+            "port": "\(port)"
+        ])
+        
+        try await tlsClient.send(message)
+
+        logger.info("Waiting for \(cmdDesc) response")
+        
+        // Process response
+        for try await response in tlsClient.inbound {
+            let text = response.withBytes { span in
+                span.withUnsafeBufferPointer { bufferPointer in
+                    String(bytes: bufferPointer, encoding: .utf8) ?? ""
+                }
+            }
+            logger.info("Response received", metadata: [
+                "bytes": .stringConvertible(text.count),
+                "preview": .string(text.count > 200 ? String(text.prefix(200)) + "..." : text)
+            ])
+            
+            if verbose {
+                let totalBytes = response.withBytes { span in span.count }
+                logger.debug("Full TLS response details", metadata: [
+                    "totalBytes": .stringConvertible(totalBytes)
+                ])
+            }
+            break
+        }
+        
+        logger.info("TLS test completed successfully")
+    }
+    
+    logger.info("TAPS TLS Example finished")
 }
 
 @available(macOS 15.0, *)
