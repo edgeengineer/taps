@@ -39,10 +39,4 @@ public protocol ServerServiceParametersWithDefault: Sendable {
     static var defaultParameters: Self { get }
 }
 
-#if canImport(NIOCore)
-import NIOCore
-public typealias NetworkBytes = ByteBuffer
-#elseif canImport(Network)
-import Foundation
-public typealias NetworkBytes = Data
-#endif
+

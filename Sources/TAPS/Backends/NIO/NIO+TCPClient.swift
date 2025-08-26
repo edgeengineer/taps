@@ -12,18 +12,20 @@ public actor TCPClient: ClientConnectionProtocol {
     public typealias ConnectionError = any Error
     
     // Actor-isolated state
-    private nonisolated let _inbound: NIOAsyncChannelInboundStream<NetworkBytes>
-    private nonisolated let outbound: NIOAsyncChannelOutboundWriter<NetworkBytes>
+    private nonisolated let _inbound: NIOAsyncChannelInboundStream<ByteBuffer>
+    private nonisolated let outbound: NIOAsyncChannelOutboundWriter<ByteBuffer>
     private nonisolated let logger = Logger(label: "engineer.edge.taps.tcp")
     
     public nonisolated var inbound: some AsyncSequence<InboundMessage, ConnectionError> {
-        _inbound
+        _inbound.map { buffer in
+            NetworkBytes(buffer: buffer)
+        }
     }
     
     /// Initialize TCP client with endpoint and parameters
     internal init(
-        inbound: NIOAsyncChannelInboundStream<NetworkBytes>,
-        outbound: NIOAsyncChannelOutboundWriter<NetworkBytes>
+        inbound: NIOAsyncChannelInboundStream<ByteBuffer>,
+        outbound: NIOAsyncChannelOutboundWriter<ByteBuffer>
     ) {
         self._inbound = inbound
         self.outbound = outbound
@@ -53,13 +55,22 @@ public actor TCPClient: ClientConnectionProtocol {
         }
     }
     
-    /// Send a message
+    /// Send NetworkBytes
+    public func send(_ networkBytes: NetworkBytes) async throws {
+        // Convert NetworkBytes to ByteBuffer for NIO
+        let buffer = networkBytes.withBytes { span in
+            span.withUnsafeBufferPointer { bufferPointer in
+                ByteBuffer(bytes: bufferPointer)
+            }
+        }
+        try await outbound.write(buffer)
+    }
+    
+    /// Send a message from Span
     #if swift(>=6.2)
     public func send(_ message: borrowing Span<UInt8>) async throws {
-        // SwiftNIO needs ownership over memory, copy over
-        // In the future we want a RecvAllocator as to not allocate from scratch
-        let buffer = message.withUnsafeBytes { buffer in
-            ByteBuffer(bytes: buffer)
+        let buffer = message.withUnsafeBufferPointer { bufferPointer in
+            ByteBuffer(bytes: bufferPointer)
         }
         try await outbound.write(buffer)
     }
@@ -70,7 +81,7 @@ public actor TCPClient: ClientConnectionProtocol {
         try await outbound.write(ByteBuffer(string: string))
     }
     
-    /// Convenience method for sending string messages
+    /// Convenience method for sending byte array messages
     public func send(_ bytes: [UInt8]) async throws {
         try await outbound.write(ByteBuffer(bytes: bytes))
     }

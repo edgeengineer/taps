@@ -6,6 +6,24 @@
       parallelizeBuildables = "YES"
       buildImplicitDependencies = "YES"
       buildArchitectures = "Automatic">
+      <PreActions>
+         <ExecutionAction
+            ActionType = "Xcode.IDEStandardExecutionActionsCore.ExecutionActionType.ShellScriptAction">
+            <ActionContent
+               title = "Run Script"
+               scriptText = "# Type a script or drag a script file from your workspace to insert its path.&#10;set -euxo pipefail&#10;&#10;# Where do we get the library from (from Xcode 26 beta toolchain - the one you manually copied from)&#10;SRC=&quot;/Applications/Xcode-beta.app/Contents/Developer/Toolchains/XcodeDefault.xctoolchain/usr/lib/swift-6.2/macosx/libswiftCompatibilitySpan.dylib&quot;&#10;DST=&quot;$BUILT_PRODUCTS_DIR&quot;&#10;&#10;echo &quot;SRC=$SRC&quot;&#10;echo &quot;DST=$DST&quot;&#10;&#10;# Check that the source file exists&#10;if [ ! -f &quot;$SRC&quot; ]; then&#10;  echo &quot;Error: Source file not found at $SRC&quot;&#10;  exit 1&#10;fi&#10;&#10;# Check architecture if necessary&#10;lipo -info &quot;$SRC&quot; || true&#10;&#10;ls -l &quot;$SRC&quot;&#10;mkdir -p &quot;$DST&quot;&#10;cp -fv &quot;$SRC&quot; &quot;$DST/&quot;&#10;&#10;# signature just in case&#10;codesign --force --sign - &quot;$DST/libswiftCompatibilitySpan.dylib&quot; || true&#10;&#10;# let&apos;s make sure the file is really there&#10;ls -l &quot;$DST/libswiftCompatibilitySpan.dylib&quot;&#10;">
+               <EnvironmentBuildable>
+                  <BuildableReference
+                     BuildableIdentifier = "primary"
+                     BlueprintIdentifier = "TAPS"
+                     BuildableName = "TAPS"
+                     BlueprintName = "TAPS"
+                     ReferencedContainer = "container:">
+                  </BuildableReference>
+               </EnvironmentBuildable>
+            </ActionContent>
+         </ExecutionAction>
+      </PreActions>
       <BuildActionEntries>
          <BuildActionEntry
             buildForTesting = "YES"

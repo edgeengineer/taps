@@ -82,7 +82,7 @@ struct TCP: AsyncParsableCommand, SubCommandProtocol {
         }
         host = resolvedHost
         port = resolvedPort
-        try await runTAPSExample(subCmd: self)
+        try await runTCPClient(subCmd: self)
     }
 }
 
@@ -161,15 +161,20 @@ func runTCPClient(subCmd: any SubCommandProtocol) async throws {
         
         // Process response
         for try await response in tcpClient.inbound {
-            let text = String(buffer: response)
+            let text = response.withBytes { span in
+                span.withUnsafeBufferPointer { bufferPointer in
+                    String(bytes: bufferPointer, encoding: .utf8) ?? ""
+                }
+            }
             logger.info("Response received", metadata: [
                 "bytes": .stringConvertible(text.count),
                 "preview": .string(text.count > 200 ? String(text.prefix(200)) + "..." : text)
             ])
             
             if verbose {
+                let totalBytes = response.withBytes { span in span.count }
                 logger.debug("Full response details", metadata: [
-                    "totalBytes": .stringConvertible(response.readableBytes)
+                    "totalBytes": .stringConvertible(totalBytes)
                 ])
             }
             break
