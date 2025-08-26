@@ -116,12 +116,12 @@ struct HTTP: AsyncParsableCommand, SubCommandProtocol {
         host = resolvedHost
         port = resolvedPort
         
-        try await runTAPSExample(subCmd: self)
+        try await runTCPClient(subCmd: self)
     }
 }
 
 @available(macOS 15.0, *)
-func runTAPSExample(subCmd: any SubCommandProtocol) async throws {
+func runTCPClient(subCmd: any SubCommandProtocol) async throws {
     let cmdDesc = String(describing: type(of: subCmd))
     let host = subCmd.host ?? "tcpbin.com"
     let port = subCmd.port ?? 4242
@@ -179,4 +179,8 @@ func runTAPSExample(subCmd: any SubCommandProtocol) async throws {
     }
     
     logger.info("TAPS Example finished")
+}
+
+@available(macOS 15.0, *)
+func runTCPServer(subCmd: any SubCommandProtocol) async throws {
 }

@@ -28,9 +28,9 @@ func testEndpoint() {
 
 @Test("TCP Service creation")
 func testTCPService() {
-    let service = TCPService(host: "example.com", port: 1234)
+    let service = TCPClientService(host: "example.com", port: 1234)
     // Test that service is created correctly
-    #expect(service is TCPService)
+    #expect(service is TCPClientService)
 }
 
 @Test("TCP Parameters defaults")
@@ -44,5 +44,5 @@ func testTCPParameters() {
 @Test("Service discovery syntax")
 func testServiceDiscovery() {
     let service = TAPS.tcp(host: "example.com", port: 1234)
-    #expect(service is TCPService)
+    #expect(service is TCPClientService)
 }

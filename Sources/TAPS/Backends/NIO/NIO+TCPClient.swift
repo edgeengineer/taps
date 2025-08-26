@@ -6,14 +6,14 @@ import Logging
 
 /// TCP Client as proper with real SwiftNIO implementation
 @available(macOS 15.0, *)
-public actor TCPClient: ClientConnection {
+public actor TCPClient: ClientConnectionProtocol {
     public typealias InboundMessage = NetworkBytes
     public typealias OutboundMessage = NetworkBytes
     public typealias ConnectionError = any Error
     
     // Actor-isolated state
-    private nonisolated let _inbound: NIOAsyncChannelInboundStream<ByteBuffer>
-    private nonisolated let outbound: NIOAsyncChannelOutboundWriter<ByteBuffer>
+    private nonisolated let _inbound: NIOAsyncChannelInboundStream<NetworkBytes>
+    private nonisolated let outbound: NIOAsyncChannelOutboundWriter<NetworkBytes>
     private nonisolated let logger = Logger(label: "engineer.edge.taps.tcp")
     
     public nonisolated var inbound: some AsyncSequence<InboundMessage, ConnectionError> {
@@ -22,17 +22,18 @@ public actor TCPClient: ClientConnection {
     
     /// Initialize TCP client with endpoint and parameters
     internal init(
-        inbound: NIOAsyncChannelInboundStream<ByteBuffer>,
-        outbound: NIOAsyncChannelOutboundWriter<ByteBuffer>
+        inbound: NIOAsyncChannelInboundStream<NetworkBytes>,
+        outbound: NIOAsyncChannelOutboundWriter<NetworkBytes>
     ) {
         self._inbound = inbound
         self.outbound = outbound
     }
 
     package static func withConnection<T: Sendable>(
+        context: TAPSContext,
         host: String,
         port: Int,
-        parameters: TCPParameters,
+        parameters: TCPClientParameters,
         perform: @escaping @Sendable (TCPClient) async throws -> T
     ) async throws -> T {
         // Bootstrap TCP connection with simpler pipeline
@@ -72,6 +73,13 @@ public actor TCPClient: ClientConnection {
     /// Convenience method for sending string messages
     public func send(_ bytes: [UInt8]) async throws {
         try await outbound.write(ByteBuffer(bytes: bytes))
+    }
+    
+    /// Close the connection
+    public func close() async throws {
+        // The connection is automatically closed when the NIOAsyncChannel finishes
+        // This is handled by the withConnection pattern in the static method
+        outbound.finish()
     }
 }
 #endif

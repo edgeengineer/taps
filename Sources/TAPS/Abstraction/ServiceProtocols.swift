@@ -6,10 +6,11 @@ import AsyncAlgorithms
 /// Base protocol for client services
 public protocol ClientServiceProtocol: Sendable {
     associatedtype Parameters: Sendable
-    associatedtype Client: ClientConnection
+    associatedtype Client: ClientConnectionProtocol
     
-    /// Create connection with given parameters
+    /// Create connection with given parameters and context
     func withConnection<T: Sendable>(
+        context: TAPSContext,
         parameters: Parameters,
         perform: @escaping @Sendable (Client) async throws -> T
     ) async throws -> T
@@ -23,10 +24,14 @@ public protocol ServiceParametersWithDefault: Sendable {
 /// Base protocol for server services
 public protocol ServerServiceProtocol: Sendable {
     associatedtype Parameters: Sendable
-    associatedtype Server: ServerConnectionProtocol
+    associatedtype Client: ClientConnectionProtocol
     
-    /// Create server with given parameters
-    func makeServer(parameters: Parameters) async throws -> Server
+    /// Accept clients using withServer pattern
+    func withServer<T: Sendable>(
+        context: TAPSContext,
+        parameters: Parameters,
+        acceptClient: @escaping @Sendable (Client) async throws -> T
+    ) async throws -> T
 }
 
 /// Server parameters with defaults

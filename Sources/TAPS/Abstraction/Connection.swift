@@ -15,15 +15,17 @@ public protocol ConnectionProtocol<InboundMessage, OutboundMessage>: Sendable {
 }
 
 /// Protocol for client connections
-public protocol ClientConnection<InboundMessage, OutboundMessage>: ConnectionProtocol {}
+public protocol ClientConnectionProtocol<InboundMessage, OutboundMessage>: ConnectionProtocol {}
 
 /// Protocol for server connections that accept clients
-public protocol ServerConnectionProtocol<
-    InboundMessage,
-    OutboundMessage
->: ConnectionProtocol where
-    OutboundMessage == Never,
-    InboundMessage: ClientConnection<InboundMessage, OutboundMessage>
-{
+public protocol ServerConnectionProtocol: Sendable {
+    associatedtype Client: ClientConnectionProtocol
+    associatedtype ConnectionError: Swift.Error
+    associatedtype Connections: AsyncSequence<Client, ConnectionError>
     
+    /// Stream of accepted client connections
+    var connections: Connections { get }
+    
+    /// Close the server and stop accepting connections
+    func close() async throws
 }
