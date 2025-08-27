@@ -22,109 +22,53 @@ public actor TCPServer {
             "backlog": .stringConvertible(parameters.backlog)
         ])
         
-        // Bootstrap server with SwiftNIO following the same pattern as TCPClient
-        let serverChannel = try await ServerBootstrap(group: MultiThreadedEventLoopGroup.singleton)
+        // Create server channel
+        let channel = try await ServerBootstrap(group: MultiThreadedEventLoopGroup.singleton)
+            .serverChannelOption(.socketOption(.so_reuseaddr), value: 1)
             .serverChannelOption(ChannelOptions.backlog, value: Int32(parameters.backlog))
-            .serverChannelOption(ChannelOptions.socket(.init(SOL_SOCKET), .init(SO_REUSEADDR)), value: parameters.reuseAddress ? 1 : 0)
             .childChannelOption(ChannelOptions.socket(.init(IPPROTO_TCP), .init(TCP_NODELAY)), value: parameters.noDelay ? 1 : 0)
-            .childChannelInitializer { channel in
-                channel.eventLoop.makeSucceededVoidFuture()
+            .bind(
+                host: "0.0.0.0",
+                port: port
+            ) { channel in
+                channel.eventLoop.makeCompletedFuture {
+                    return try NIOAsyncChannel(
+                        wrappingChannelSynchronously: channel,
+                        configuration: NIOAsyncChannel.Configuration(
+                            inboundType: ByteBuffer.self,
+                            outboundType: ByteBuffer.self
+                        )
+                    )
+                }
             }
-            .bind(host: "0.0.0.0", port: port)
-            .get()
         
         logger.info("TCP server bound to port", metadata: ["port": .stringConvertible(port)])
         
-        // Use withThrowingDiscardingTaskGroup for structured concurrency as requested
+        // Handle connections using withThrowingDiscardingTaskGroup
         return try await withThrowingDiscardingTaskGroup { group in
-            
-            // Create async sequence for server accepts
-            let serverSequence = AsyncServerSequence(serverChannel: serverChannel, logger: logger)
-            
-            // Server accepting task - handle all client connections
-            group.addTask { @Sendable in
-                do {
-                    // Accept connections and handle each client
-                    for try await clientChannel in serverSequence {
-                        // Create a new task group for each client to avoid capturing 'group'
-                        Task { @Sendable in
-                            do {
-                                let asyncClientChannel = try NIOAsyncChannel<ByteBuffer, ByteBuffer>(
-                                    wrappingChannelSynchronously: clientChannel
-                                )
-                                
-                                try await asyncClientChannel.executeThenClose { inbound, outbound in
-                                    let client = TCPClient(inbound: inbound, outbound: outbound)
-                                    _ = try await acceptClient(client)
-                                }
-                            } catch {
-                                logger.error("Error handling client", metadata: [
-                                    "error": .string(String(describing: error))
-                                ])
-                            }
-                        }
-                    }
-                } catch {
-                    logger.error("Server accept loop failed", metadata: [
-                        "error": .string(String(describing: error))
-                    ])
+            try await channel.executeThenClose { inbound in
+                for try await connectionChannel in inbound {
+                    logger.info("TCP server accepted new client connection")
+                    return try await handleConnection(channel: connectionChannel, acceptClient: acceptClient, logger: logger)
                 }
+                throw TAPSError.serviceUnavailable("No clients connected")
             }
-            
-            // The server runs until cancelled - this will complete when TaskGroup is cancelled
-            try await Task.sleep(until: .now.advanced(by: .seconds(365 * 24 * 3600)), clock: .continuous)
-            return () as! T
+        }
+    }
+    
+    /// Handle a single connection using ByteBuffer-based NIOAsyncChannel
+    private static func handleConnection<T: Sendable>(
+        channel: NIOAsyncChannel<ByteBuffer, ByteBuffer>,
+        acceptClient: @escaping @Sendable (TCPClient) async throws -> T,
+        logger: Logger
+    ) async throws -> T {
+        return try await channel.executeThenClose { inbound, outbound in
+            logger.info("TCP server creating TCPClient with ByteBuffer streams")
+            let client = TCPClient(inbound: inbound, outbound: outbound)
+            return try await acceptClient(client)
         }
     }
 }
 
-// MARK: - AsyncServerSequence
-
-/// Simplified async sequence for TCP server (placeholder implementation)
-/// 
-/// NOTE: This is a simplified implementation. A production-ready version would require
-/// deeper integration with NIO's ServerBootstrap and EventLoop mechanisms.
-@available(macOS 15.0, *)
-internal struct AsyncServerSequence: AsyncSequence {
-    typealias Element = Channel
-    
-    private let serverChannel: Channel
-    private let logger: Logger
-    
-    init(serverChannel: Channel, logger: Logger) {
-        self.serverChannel = serverChannel
-        self.logger = logger
-    }
-    
-    func makeAsyncIterator() -> AsyncIterator {
-        AsyncIterator(serverChannel: serverChannel, logger: logger)
-    }
-    
-    struct AsyncIterator: AsyncIteratorProtocol {
-        private let serverChannel: Channel
-        private let logger: Logger
-        private var isFinished = false
-        
-        init(serverChannel: Channel, logger: Logger) {
-            self.serverChannel = serverChannel
-            self.logger = logger
-        }
-        
-        mutating func next() async throws -> Channel? {
-            // This is a placeholder implementation
-            // In a real implementation, this would integrate with NIO's server accept mechanism
-            
-            guard !isFinished else { return nil }
-            
-            logger.debug("TCP server async sequence - placeholder implementation")
-            
-            // For now, this will never actually accept connections
-            // Real implementation would need NIO ServerBootstrap with async support
-            isFinished = true
-            
-            throw TAPSError.serviceUnavailable("TCP Server async accept not yet fully implemented. Requires deeper NIO integration.")
-        }
-    }
-}
 
 #endif

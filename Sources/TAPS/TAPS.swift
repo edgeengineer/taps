@@ -127,4 +127,33 @@ extension TAPS {
         )
     }
     
+    /// Generic withServer method with default parameters (without context)
+    public func withServer<Service: ServerServiceProtocol, T: Sendable>(
+        on service: Service,
+        parameters: Service.Parameters = .defaultParameters,
+        acceptClient: @escaping @Sendable (Service.Client) async throws -> T
+    ) async throws -> T where Service.Parameters: ServerServiceParametersWithDefaults {
+        let context = TAPSContext()
+        return try await service.withServer(
+            context: context,
+            parameters: parameters,
+            acceptClient: acceptClient
+        )
+    }
+    
+    @_disfavoredOverload
+    /// Generic withServer method with explicit parameters (without context)
+    public func withServer<Service: ServerServiceProtocol, T: Sendable>(
+        on service: Service,
+        parameters: Service.Parameters,
+        acceptClient: @escaping @Sendable (Service.Client) async throws -> T
+    ) async throws -> T {
+        let context = TAPSContext()
+        return try await service.withServer(
+            context: context,
+            parameters: parameters,
+            acceptClient: acceptClient
+        )
+    }
+    
 }
