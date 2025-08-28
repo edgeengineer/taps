@@ -85,16 +85,30 @@ struct TCPServerTests {
             // Server task
             group.addTask { @Sendable in
                 print("🔄 Server: waiting for external client...")
-                do {
-                    let result = try await taps.withServer(on: .tcp(port: port)) { tcpClient in
-                        print("✅ Server: External client connected!")
-                        return "external-client-connected"
+                let result = try await taps.withServer(on: .tcp(port: port)) { tcpClient in
+                    print("✅ Server: External client connected!")
+                    
+                    // Send welcome message
+                    let text = "Welcome to the TAPS TCP server!\n"
+                    try await tcpClient.send("\(text)")
+                    // Simple echo - read first message and echo back
+                    for try await data in tcpClient.inbound {
+                        let text = data.withBytes { span in
+                            span.withUnsafeBufferPointer { bufferPointer in
+                                String(bytes: bufferPointer, encoding: .utf8) ?? ""
+                            }
+                        }.trimmingCharacters(in: .whitespacesAndNewlines)
+                        
+                        print("✅ Server received: '\(text)'")
+                        
+                        // Echo back
+                        try await tcpClient.send("Echo: \(text)")
+                        return text
                     }
-                    return "server-result:\(result)"
-                } catch {
-                    print("❌ Server error: \(error)")
-                    throw error
+                    
+                    throw TestFailureError("No data received")
                 }
+                return "server-result:\(result)"
             }
             
             // Timeout task

@@ -46,7 +46,7 @@ public actor TCPServer {
         // ========================================
         // VERSION A: Working implementation (WITHOUT withThrowingDiscardingTaskGroup)
         // ========================================
-        /*
+        
         return try await channel.executeThenClose { inbound in
             print("TCP server ready to accept clients")
             
@@ -64,12 +64,13 @@ public actor TCPServer {
             
             throw TAPSError.serviceUnavailable("No clients connected")
         }
-        */
+        
         
         // ========================================
         // VERSION B: EDG-221 requirement (WITH withThrowingDiscardingTaskGroup)
         // ========================================
         // Issue: This implementation causes test hanging/deadlock
+        /*
         return try await channel.executeThenClose { inbound in
             print("TCP server ready to accept clients")
             
@@ -89,6 +90,7 @@ public actor TCPServer {
                 throw TAPSError.serviceUnavailable("No clients connected")
             }
         }
+        */
     }
     
     /// Handle a single connection using ByteBuffer-based NIOAsyncChannel
