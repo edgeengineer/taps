@@ -6,7 +6,7 @@ import Logging
 
 /// TCP Client as proper with real SwiftNIO implementation
 @available(macOS 15.0, *)
-public actor TCPClient: ClientConnection {
+public actor TCPClient: ClientConnectionProtocol {
     public typealias InboundMessage = NetworkBytes
     public typealias OutboundMessage = NetworkBytes
     public typealias ConnectionError = any Error
@@ -17,7 +17,9 @@ public actor TCPClient: ClientConnection {
     private nonisolated let logger = Logger(label: "engineer.edge.taps.tcp")
     
     public nonisolated var inbound: some AsyncSequence<InboundMessage, ConnectionError> {
-        _inbound
+        _inbound.map { buffer in
+            NetworkBytes(buffer: buffer)
+        }
     }
     
     /// Initialize TCP client with endpoint and parameters
@@ -30,9 +32,10 @@ public actor TCPClient: ClientConnection {
     }
 
     package static func withConnection<T: Sendable>(
+        context: TAPSContext,
         host: String,
         port: Int,
-        parameters: TCPParameters,
+        parameters: TCPClientParameters,
         perform: @escaping @Sendable (TCPClient) async throws -> T
     ) async throws -> T {
         // Bootstrap TCP connection with simpler pipeline
@@ -52,13 +55,22 @@ public actor TCPClient: ClientConnection {
         }
     }
     
-    /// Send a message
+    /// Send NetworkBytes
+    public func send(_ networkBytes: NetworkBytes) async throws {
+        // Convert NetworkBytes to ByteBuffer for NIO
+        let buffer = networkBytes.withBytes { span in
+            span.withUnsafeBufferPointer { bufferPointer in
+                ByteBuffer(bytes: bufferPointer)
+            }
+        }
+        try await outbound.write(buffer)
+    }
+    
+    /// Send a message from Span
     #if swift(>=6.2)
     public func send(_ message: borrowing Span<UInt8>) async throws {
-        // SwiftNIO needs ownership over memory, copy over
-        // In the future we want a RecvAllocator as to not allocate from scratch
-        let buffer = message.withUnsafeBytes { buffer in
-            ByteBuffer(bytes: buffer)
+        let buffer = message.withUnsafeBufferPointer { bufferPointer in
+            ByteBuffer(bytes: bufferPointer)
         }
         try await outbound.write(buffer)
     }
@@ -69,9 +81,17 @@ public actor TCPClient: ClientConnection {
         try await outbound.write(ByteBuffer(string: string))
     }
     
-    /// Convenience method for sending string messages
+    /// Convenience method for sending byte array messages
     public func send(_ bytes: [UInt8]) async throws {
         try await outbound.write(ByteBuffer(bytes: bytes))
+    }
+    
+    /// Close the connection
+    public func close() async throws {
+        // The connection is automatically closed when the NIOAsyncChannel finishes
+        // This is handled by the withConnection pattern in the static method
+        logger.info("Closing TCPClient connection")
+        outbound.finish()
     }
 }
 #endif

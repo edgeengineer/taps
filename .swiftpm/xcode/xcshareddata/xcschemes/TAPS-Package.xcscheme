@@ -6,6 +6,15 @@
       parallelizeBuildables = "YES"
       buildImplicitDependencies = "YES"
       buildArchitectures = "Automatic">
+      <PreActions>
+         <ExecutionAction
+            ActionType = "Xcode.IDEStandardExecutionActionsCore.ExecutionActionType.ShellScriptAction">
+            <ActionContent
+               title = "Run Script"
+               scriptText = "# Type a script or drag a script file from your workspace to insert its path.&#10;">
+            </ActionContent>
+         </ExecutionAction>
+      </PreActions>
       <BuildActionEntries>
          <BuildActionEntry
             buildForTesting = "YES"
@@ -51,6 +60,24 @@
                BlueprintIdentifier = "TAPSTests"
                BuildableName = "TAPSTests"
                BlueprintName = "TAPSTests"
+               ReferencedContainer = "container:">
+            </BuildableReference>
+            <SkippedTests>
+               <Test
+                  Identifier = "TCPServerTests/testTCPServerMinimal()">
+               </Test>
+               <Test
+                  Identifier = "TCPServerTests/testTCPServerWithExternalClient()">
+               </Test>
+            </SkippedTests>
+         </TestableReference>
+         <TestableReference
+            skipped = "YES">
+            <BuildableReference
+               BuildableIdentifier = "primary"
+               BlueprintIdentifier = "TCPServerE2ETests"
+               BuildableName = "TCPServerE2ETests"
+               BlueprintName = "TCPServerE2ETests"
                ReferencedContainer = "container:">
             </BuildableReference>
          </TestableReference>

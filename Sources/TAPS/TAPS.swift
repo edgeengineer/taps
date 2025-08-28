@@ -31,15 +31,18 @@ public actor TAPS: ServiceDiscovery {
         }
     }
     
+    // MARK: - Client Support
+    
     /// Generic withConnection method with default parameters
     public func withConnection<Service: ClientServiceProtocol, T: Sendable>(
         to service: Service,
+        parameters: Service.Parameters = .defaultParameters,
         _ operation: @Sendable @escaping (Service.Client) async throws -> T
-    ) async throws -> T where Service.Parameters: ServiceParametersWithDefault {
-        return try await withConnection(
-            to: service,
-            parameters: Service.Parameters.defaultParameters,
-            operation
+    ) async throws -> T where Service.Parameters: ClientServiceParametersWithDefaults {
+        return try await service.withConnection(
+            context: TAPSContext(),
+            parameters: parameters,
+            perform: operation
         )
     }
     
@@ -49,22 +52,14 @@ public actor TAPS: ServiceDiscovery {
         parameters: Service.Parameters,
         _ operation: @Sendable @escaping (Service.Client) async throws -> T
     ) async throws -> T {
+        // TAPS creates an empty TAPSContext for each connection
+        let context = TAPSContext()
+        
         return try await service.withConnection(
+            context: context,
             parameters: parameters,
             perform: operation
         )
-    }
-    
-    // MARK: - Server Support (future)
-    
-    /// Generic withServer method (placeholder for future implementation)
-    public func withServer<Service: ServerServiceProtocol, T: Sendable>(
-        on service: Service,
-        parameters: Service.Parameters,
-        acceptClient: @Sendable @escaping (Service.Server) async throws -> T
-    ) async throws -> T where Service.Parameters: ServerServiceParametersWithDefault {
-        // Future implementation for server support
-        throw TAPSError.serviceUnavailable("Server support not implemented yet")
     }
     
     // MARK: - Private Actor Methods
@@ -98,4 +93,67 @@ public actor TAPS: ServiceDiscovery {
     public var connectionCount: Int {
         activeConnections.count
     }
+}
+
+extension TAPS {
+    
+    // MARK: - Server Support
+    /// Generic withServer method with default parameters
+    public func withServer<Service: ServerServiceProtocol, T: Sendable>(
+        context: TAPSContext,
+        on service: Service,
+        parameters: Service.Parameters = .defaultParameters,
+        acceptClient: @escaping @Sendable (Service.Client) async throws -> T
+    ) async throws -> T where Service.Parameters: ServerServiceParametersWithDefaults {
+        return try await service.withServer(
+            context: context,
+            parameters: parameters,
+            acceptClient: acceptClient
+        )
+    }
+    
+    @_disfavoredOverload
+    /// Generic withServer method with explicit parameters
+    public func withServer<Service: ServerServiceProtocol, T: Sendable>(
+        context: TAPSContext,
+        on service: Service,
+        parameters: Service.Parameters,
+        acceptClient: @escaping @Sendable (Service.Client) async throws -> T
+    ) async throws -> T {
+        return try await service.withServer(
+            context: context,
+            parameters: parameters,
+            acceptClient: acceptClient
+        )
+    }
+    
+    /// Generic withServer method with default parameters (without context)
+    public func withServer<Service: ServerServiceProtocol, T: Sendable>(
+        on service: Service,
+        parameters: Service.Parameters = .defaultParameters,
+        acceptClient: @escaping @Sendable (Service.Client) async throws -> T
+    ) async throws -> T where Service.Parameters: ServerServiceParametersWithDefaults {
+        let context = TAPSContext()
+        return try await service.withServer(
+            context: context,
+            parameters: parameters,
+            acceptClient: acceptClient
+        )
+    }
+    
+    @_disfavoredOverload
+    /// Generic withServer method with explicit parameters (without context)
+    public func withServer<Service: ServerServiceProtocol, T: Sendable>(
+        on service: Service,
+        parameters: Service.Parameters,
+        acceptClient: @escaping @Sendable (Service.Client) async throws -> T
+    ) async throws -> T {
+        let context = TAPSContext()
+        return try await service.withServer(
+            context: context,
+            parameters: parameters,
+            acceptClient: acceptClient
+        )
+    }
+    
 }

@@ -9,6 +9,7 @@ public enum TAPSError: Error, Sendable {
     case networkUnavailable
     case timeoutExpired
     case serviceUnavailable(String)
+    case invalidParameters(String)
 }
 
 /// Connection-specific errors

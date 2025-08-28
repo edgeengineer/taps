@@ -3,41 +3,33 @@
 
 import AsyncAlgorithms
 
+/// Base protocol for all transport services
+public protocol ServiceProtocol: Sendable {
+    associatedtype Parameters: ServiceParameters
+}
+
 /// Base protocol for client services
-public protocol ClientServiceProtocol: Sendable {
-    associatedtype Parameters: Sendable
-    associatedtype Client: ClientConnection
+public protocol ClientServiceProtocol: ServiceProtocol where Parameters: ClientServiceParameters {
+    associatedtype Client: ClientConnectionProtocol
     
-    /// Create connection with given parameters
+    /// Create connection with given parameters and context
     func withConnection<T: Sendable>(
+        context: TAPSContext,
         parameters: Parameters,
         perform: @escaping @Sendable (Client) async throws -> T
     ) async throws -> T
 }
 
-/// Parameters with default values
-public protocol ServiceParametersWithDefault: Sendable {
-    static var defaultParameters: Self { get }
-}
-
 /// Base protocol for server services
-public protocol ServerServiceProtocol: Sendable {
-    associatedtype Parameters: Sendable
-    associatedtype Server: ServerConnectionProtocol
+public protocol ServerServiceProtocol: ServiceProtocol where Parameters: ServerServiceParameters {
+    associatedtype Client: ClientConnectionProtocol
     
-    /// Create server with given parameters
-    func makeServer(parameters: Parameters) async throws -> Server
+    /// Accept clients using withServer pattern
+    func withServer<T: Sendable>(
+        context: TAPSContext,
+        parameters: Parameters,
+        acceptClient: @escaping @Sendable (Client) async throws -> T
+    ) async throws -> T
 }
 
-/// Server parameters with defaults
-public protocol ServerServiceParametersWithDefault: Sendable {
-    static var defaultParameters: Self { get }
-}
 
-#if canImport(NIOCore)
-import NIOCore
-public typealias NetworkBytes = ByteBuffer
-#elseif canImport(Network)
-import Foundation
-public typealias NetworkBytes = Data
-#endif

@@ -1,10 +1,10 @@
-// TCPService.swift
+// TCPClientService.swift
 // RFC-compliant TCP service implementation
 import Foundation
 
 /// TCP service implementing ClientServiceProtocol
-public struct TCPClientService: ClientServiceProtocol {
-    public typealias Parameters = TCPParameters
+public struct TCPClientService: ClientServiceProtocol, ServiceWithDefaults {
+    public typealias Parameters = TCPClientParameters
     public typealias Client = TCPClient
     
     private let host: String
@@ -15,22 +15,35 @@ public struct TCPClientService: ClientServiceProtocol {
         self.port = port
     }
     
-    /// Create TCP client with given parameters
+    /// Create TCP client with given parameters and context
     public func withConnection<T: Sendable>(
+        context: TAPSContext,
         parameters: Parameters,
         perform: @escaping @Sendable (Client) async throws -> T
     ) async throws -> T {
         return try await TCPClient.withConnection(
+            context: context,
             host: host,
             port: port,
             parameters: parameters,
             perform: perform
         )
     }
+    
+    // MARK: - ServiceWithDefaults
+    public static var defaultParameters: TCPClientParameters {
+        return TCPClientParameters.defaultParameters
+    }
 }
 
-/// TCP service parameters
-public struct TCPParameters: ServiceParametersWithDefault {
+extension ClientServiceProtocol where Self == TCPClientService {
+    public static func tcp(host: String, port: Int) -> TCPClientService {
+        TCPClientService(host: host, port: port)
+    }
+}
+
+/// TCP Client service parameters
+public struct TCPClientParameters: ClientServiceParametersWithDefaults {
     public var connectionTimeout: Duration
     public var keepAlive: Bool
     public var noDelay: Bool
@@ -45,13 +58,7 @@ public struct TCPParameters: ServiceParametersWithDefault {
         self.noDelay = noDelay
     }
     
-    public static var defaultParameters: TCPParameters {
-        return TCPParameters()
-    }
-}
-
-extension ClientServiceProtocol where Self == TCPClientService {
-    public static func tcp(host: String, port: Int) -> TCPClientService {
-        TCPClientService(host: host, port: port)
+    public static var defaultParameters: TCPClientParameters {
+        return TCPClientParameters()
     }
 }
