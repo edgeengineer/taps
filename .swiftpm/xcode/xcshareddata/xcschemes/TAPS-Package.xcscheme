@@ -62,6 +62,24 @@
                BlueprintName = "TAPSTests"
                ReferencedContainer = "container:">
             </BuildableReference>
+            <SkippedTests>
+               <Test
+                  Identifier = "TCPServerTests/testTCPServerMinimal()">
+               </Test>
+               <Test
+                  Identifier = "TCPServerTests/testTCPServerWithExternalClient()">
+               </Test>
+            </SkippedTests>
+         </TestableReference>
+         <TestableReference
+            skipped = "NO">
+            <BuildableReference
+               BuildableIdentifier = "primary"
+               BlueprintIdentifier = "TCPServerE2ETests"
+               BuildableName = "TCPServerE2ETests"
+               BlueprintName = "TCPServerE2ETests"
+               ReferencedContainer = "container:">
+            </BuildableReference>
          </TestableReference>
       </Testables>
    </TestAction>

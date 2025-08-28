@@ -90,6 +90,7 @@ public actor TCPClient: ClientConnectionProtocol {
     public func close() async throws {
         // The connection is automatically closed when the NIOAsyncChannel finishes
         // This is handled by the withConnection pattern in the static method
+        logger.info("Closing TCPClient connection")
         outbound.finish()
     }
 }

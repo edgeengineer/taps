@@ -51,19 +51,26 @@ public struct NetworkBytes: Sendable {
         switch backing {
         #if canImport(NIOCore)
         case .buffer(let buffer):
-            return try buffer.withUnsafeReadableBytes { bufferPointer in
-                try body(Span(_unsafeBytes: bufferPointer))
-            }
+            
+            return try buffer.readableBytesView.withContiguousStorageIfAvailable { ptr -> T in
+                try body(Span(_unsafeElements: UnsafeBufferPointer(start: ptr.baseAddress, count: ptr.count)))
+            } ?? {
+                let copy = [UInt8](buffer.readableBytesView) // fallback-copy
+                return try copy.withUnsafeBufferPointer { p in
+                    try body(Span(_unsafeElements: p))
+                }
+            }()
         #endif
         #if canImport(Foundation)
         case .data(let data):
-            return try data.withUnsafeBytes { bufferPointer in
-                try body(Span(_unsafeElements: bufferPointer.bindMemory(to: UInt8.self)))
+            return try data.withUnsafeBytes { raw in
+                let p = raw.bindMemory(to: UInt8.self)
+                return try body(Span(_unsafeElements: p))
             }
         #endif
         case .array(let array):
-            return try array.withUnsafeBufferPointer { bufferPointer in
-                try body(Span(_unsafeElements: bufferPointer))
+            return try array.withUnsafeBufferPointer { p in
+                try body(Span(_unsafeElements: p))
             }
         }
     }
@@ -85,8 +92,7 @@ public struct NetworkBytes: Sendable {
         }
     }
     
-    // MARK: - Convenience parsing methods (following swift-binary-parsing patterns)
-    
+    // MARK: - Convenience parsing methods
     /// Parse a big-endian UInt32 from the start of the data
     public func parseUInt32BigEndian() throws -> UInt32 {
         return try parse { parser in
@@ -101,14 +107,15 @@ public struct NetworkBytes: Sendable {
         }
     }
     
-    /// Parse bytes as UTF-8 string
+    /// Parse bytes as UTF-8 string (делает копию для безопасности)
     public func parseUTF8String() throws -> String {
         return try withBytes { span in
-            try span.withUnsafeBufferPointer { buffer in
-                guard let string = String(bytes: buffer, encoding: .utf8) else {
+            // Явное декодирование → копия, никаких висячих ссылок.
+            try span.withUnsafeBufferPointer { p in
+                guard let s = String(bytes: p, encoding: .utf8) else {
                     throw NetworkBytesError.invalidUTF8
                 }
-                return string
+                return s
             }
         }
     }

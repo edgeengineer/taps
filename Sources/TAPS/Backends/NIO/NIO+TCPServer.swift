@@ -24,11 +24,10 @@ public actor TCPServer {
         
         // Create server channel
         let channel = try await ServerBootstrap(group: MultiThreadedEventLoopGroup.singleton)
-            .serverChannelOption(.socketOption(.so_reuseaddr), value: 1)
             .serverChannelOption(ChannelOptions.backlog, value: Int32(parameters.backlog))
-            .childChannelOption(ChannelOptions.socket(.init(IPPROTO_TCP), .init(TCP_NODELAY)), value: parameters.noDelay ? 1 : 0)
+            .serverChannelOption(ChannelOptions.socketOption(.so_reuseaddr), value: 1)
             .bind(
-                host: "0.0.0.0",
+                host: "127.0.0.1",
                 port: port
             ) { channel in
                 channel.eventLoop.makeCompletedFuture {
@@ -44,13 +43,49 @@ public actor TCPServer {
         
         logger.info("TCP server bound to port", metadata: ["port": .stringConvertible(port)])
         
-        // Handle connections using withThrowingDiscardingTaskGroup
-        return try await withThrowingDiscardingTaskGroup { group in
-            try await channel.executeThenClose { inbound in
+        // ========================================
+        // VERSION A: Working implementation (WITHOUT withThrowingDiscardingTaskGroup)
+        // ========================================
+        /*
+        return try await channel.executeThenClose { inbound in
+            print("TCP server ready to accept clients")
+            
+            // Handle incoming connections - first client wins approach  
+            for try await connectionChannel in inbound {
+                logger.info("TCP server accepted new client connection")
+                
+                // Handle first client directly (TAPS single-connection pattern)
+                return try await handleConnection(
+                    channel: connectionChannel,
+                    acceptClient: acceptClient,
+                    logger: logger
+                )
+            }
+            
+            throw TAPSError.serviceUnavailable("No clients connected")
+        }
+        */
+        
+        // ========================================
+        // VERSION B: EDG-221 requirement (WITH withThrowingDiscardingTaskGroup)
+        // ========================================
+        // Issue: This implementation causes test hanging/deadlock
+        return try await channel.executeThenClose { inbound in
+            print("TCP server ready to accept clients")
+            
+            return try await withThrowingDiscardingTaskGroup { group in
+                // Handle incoming connections - first client wins approach  
                 for try await connectionChannel in inbound {
                     logger.info("TCP server accepted new client connection")
-                    return try await handleConnection(channel: connectionChannel, acceptClient: acceptClient, logger: logger)
+                    
+                    // Handle first client directly (TAPS single-connection pattern)
+                    return try await handleConnection(
+                        channel: connectionChannel,
+                        acceptClient: acceptClient,
+                        logger: logger
+                    )
                 }
+                
                 throw TAPSError.serviceUnavailable("No clients connected")
             }
         }
