@@ -79,6 +79,10 @@ public struct TCPSocket: ClientConnectionProtocol {
         self._inbound = inbound
         self.outbound = outbound
     }
+    
+    public func run() async throws {
+        // TODO: Do we need to keep `run()` active in the background?
+    }
 
     package static func withClientConnection<T: Sendable>(
         host: String,
@@ -89,6 +93,7 @@ public struct TCPSocket: ClientConnectionProtocol {
     ) async throws -> T {
         // Bootstrap TCP connection with simpler pipeline
         let channel = try await ClientBootstrap(group: .singletonMultiThreadedEventLoopGroup)
+            .applyParameters(parameters)
             .connect(host: host, port: port)
             .flatMapThrowing { channel in
                 try NIOAsyncChannel<ByteBuffer, ByteBuffer>(wrappingChannelSynchronously: channel)

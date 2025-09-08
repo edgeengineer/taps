@@ -3,23 +3,18 @@
 
 import TAPS
 import Testing
+import HTTPTypes
 
 /// Example usage of TAPS TCP client
 @Suite
 struct TCPUsageTests {
     @Test(.timeLimit(.minutes(1)))
     public func testLocalTCPConnection() async throws {
-        let taps = TAPS()
-        let message = "Hello, server!"
-        
-        do {
+        try await withTAPS { taps in
+            let message = "Hello, server!"
+            
             try await confirmation { confirm in
                 try await withThrowingDiscardingTaskGroup { group in
-                    // Run TAPS service
-                    group.addTask {
-                        try await taps.run()
-                    }
-                    
                     group.addTask {
                         try await taps.withServer(
                             on: .tcp(host: "127.0.0.1", port: 54_123)
@@ -47,8 +42,51 @@ struct TCPUsageTests {
                     }
                 }
             }
-        } catch is CancellationError {
-            // Expected
         }
+    }
+}
+
+@Suite
+struct HTTP1ClientTests {
+    @Test func testHTTP1Client() async throws {
+        try await withTAPS { taps in
+            try await taps.withConnection(
+                to: .http1(host: "example.com")
+            ) { client in
+                try await client.withResponse(
+                    to: HTTPRequest(
+                        method: .get,
+                        scheme: "http",
+                        authority: "example.com",
+                        path: "/"
+                    )
+                ) { response in
+                    print(response.head)
+                    for try await part in response.body {
+                        print(String(bytes: part))
+                    }
+                }
+            }
+        }
+    }
+}
+
+func withTAPS(
+    _ perform: @Sendable @escaping (TAPS) async throws -> Void
+) async throws {
+    let taps = TAPS()
+    
+    do {
+        try await withThrowingDiscardingTaskGroup { group in
+            // Run TAPS service
+            group.addTask {
+                try await taps.run()
+            }
+            
+            defer { group.cancelAll() }
+            try await perform(taps)
+        }
+    } catch is CancellationError {
+        // Expected
     }
 }
