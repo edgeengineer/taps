@@ -37,9 +37,17 @@ public actor TAPS {
     ) async throws -> T {
         return try await service.withConnection(
             parameters: parameters,
-            context: TAPSContext(),
-            perform: operation
-        )
+            context: TAPSContext()
+        ) { client in
+            try await withThrowingTaskGroup(of: Void.self) { taskGroup in
+                taskGroup.addTask {
+                    try await client.run()
+                }
+                
+                defer { taskGroup.cancelAll() }
+                return try await operation(client)
+            }
+        }
     }
     
     // MARK: - Server Support
@@ -66,7 +74,14 @@ public actor TAPS {
         ) { server in
             try await server.withEachClient { client throws(CancellationError) in
                 do {
-                    try await acceptClient(client)
+                    try await withThrowingTaskGroup(of: Void.self) { taskGroup in
+                        taskGroup.addTask {
+                            try await client.run()
+                        }
+                        
+                        defer { taskGroup.cancelAll() }
+                        return try await acceptClient(client)
+                    }
                 } catch is CancellationError {
                     throw CancellationError()
                 } catch {
