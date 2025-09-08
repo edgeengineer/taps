@@ -7,10 +7,9 @@ import AsyncAlgorithms
 public protocol ClientConnectionProtocol<InboundMessage, OutboundMessage>: Sendable {
     associatedtype InboundMessage: Sendable
     associatedtype OutboundMessage: Sendable
-    associatedtype InboundStream: AsyncSequence where InboundStream.Element == InboundMessage
     associatedtype ConnectionError: Swift.Error
     
-    var inbound: InboundStream { get }
+    func run() async throws
 }
 
 /// Protocol for server connections that accept clients

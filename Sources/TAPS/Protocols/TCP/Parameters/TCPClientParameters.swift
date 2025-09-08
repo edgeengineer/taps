@@ -1,4 +1,3 @@
-
 public struct TCPClientParameters: ServiceParametersWithDefault {
     public var connectionTimeout: Duration
     public var socketParameters: TCPSocketParameters
@@ -15,3 +14,14 @@ public struct TCPClientParameters: ServiceParametersWithDefault {
         return TCPClientParameters()
     }
 }
+
+#if canImport(NIOPosix)
+internal import NIOPosix
+internal import NIOCore
+
+internal extension ClientBootstrap {
+    func applyParameters(_ parameters: TCPClientParameters) -> ClientBootstrap {
+        self.connectTimeout(TimeAmount(parameters.connectionTimeout))
+    }
+}
+#endif
