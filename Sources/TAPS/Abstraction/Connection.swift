@@ -3,27 +3,22 @@
 
 import AsyncAlgorithms
 
-/// Base protocol for all connection types with state management
-public protocol ConnectionProtocol<InboundMessage, OutboundMessage>: Sendable {
+/// Base protocol for all connection types
+public protocol ClientConnectionProtocol<InboundMessage, OutboundMessage>: Sendable {
     associatedtype InboundMessage: Sendable
     associatedtype OutboundMessage: Sendable
+    associatedtype InboundStream: AsyncSequence where InboundStream.Element == InboundMessage
     associatedtype ConnectionError: Swift.Error
-    associatedtype Inbound: AsyncSequence<InboundMessage, ConnectionError>
     
-    /// Stream of connection events
-    var inbound: Inbound { get }
+    var inbound: InboundStream { get }
 }
 
-/// Protocol for client connections
-public protocol ClientConnection<InboundMessage, OutboundMessage>: ConnectionProtocol {}
-
 /// Protocol for server connections that accept clients
-public protocol ServerConnectionProtocol<
-    InboundMessage,
-    OutboundMessage
->: ConnectionProtocol where
-    OutboundMessage == Never,
-    InboundMessage: ClientConnection<InboundMessage, OutboundMessage>
-{
+public protocol ServerConnectionProtocol<Client>: Sendable {
+    associatedtype Client: ClientConnectionProtocol
+    associatedtype ConnectionError: Error
     
+    func withEachClient(
+        _ acceptClient: @Sendable @escaping (Client) async throws(CancellationError) -> Void
+    ) async throws(ConnectionError)
 }

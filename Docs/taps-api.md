@@ -133,7 +133,7 @@ The `RemoteService` is a protocol that can be comformed to by various service ty
 protocol ClientServiceProtocol: Sendable {
     associatedtype Parameters: Sendable
 
-    static func withConnection<T: Sendable>(
+    func withConnection<T: Sendable>(
         parameters: Parameters,
         perform: @escaping @Sendable (Client) async throws -> T
     ) async throws -> T
@@ -203,18 +203,18 @@ This allows protocols to allow a quick setup, or require certain input.
 
 ```swift
 extension TAPS {
-    func withServer<Service: ServerServiceProtocol, T: Sendable>(
+    func withServer<Service: ServerServiceProtocol>(
         on service: Service,
         parameters: Service.Parameters = .defaultParameters,
-        acceptClient: @escaping @Sendable (Service.Client) async throws -> T
-    ) async throws -> T where Service.Parameters: ServerServiceParametersWithDefault
+        acceptClient: @escaping @Sendable (Service.Client) async throws -> Void
+    ) async throws where Service.Parameters: ServerServiceParametersWithDefault
 
     @_disfavoredOverload
-    func withServer<Service: ServerServiceProtocol, T: Sendable>(
+    func withServer<Service: ServerServiceProtocol>(
         on service: Service,
         parameters: Service.Parameters,
-        acceptClient: @escaping @Sendable (Service.Client) async throws -> T
-    ) async throws -> T
+        acceptClient: @escaping @Sendable (Service.Client) async throws -> Void
+    ) async throws
 }
 ```
 

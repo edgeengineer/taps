@@ -1,11 +1,7 @@
-// TCPService.swift
-// RFC-compliant TCP service implementation
-import Foundation
-
 /// TCP service implementing ClientServiceProtocol
 public struct TCPClientService: ClientServiceProtocol {
-    public typealias Parameters = TCPParameters
-    public typealias Client = TCPClient
+    public typealias Parameters = TCPClientParameters
+    public typealias Client = TCPSocket
     
     private let host: String
     private let port: Int
@@ -18,35 +14,16 @@ public struct TCPClientService: ClientServiceProtocol {
     /// Create TCP client with given parameters
     public func withConnection<T: Sendable>(
         parameters: Parameters,
+        context: TAPSContext,
         perform: @escaping @Sendable (Client) async throws -> T
     ) async throws -> T {
-        return try await TCPClient.withConnection(
+        return try await TCPSocket.withClientConnection(
             host: host,
             port: port,
             parameters: parameters,
+            context: context,
             perform: perform
         )
-    }
-}
-
-/// TCP service parameters
-public struct TCPParameters: ServiceParametersWithDefault {
-    public var connectionTimeout: Duration
-    public var keepAlive: Bool
-    public var noDelay: Bool
-    
-    public init(
-        connectionTimeout: Duration = .seconds(30),
-        keepAlive: Bool = false,
-        noDelay: Bool = true
-    ) {
-        self.connectionTimeout = connectionTimeout
-        self.keepAlive = keepAlive
-        self.noDelay = noDelay
-    }
-    
-    public static var defaultParameters: TCPParameters {
-        return TCPParameters()
     }
 }
 
