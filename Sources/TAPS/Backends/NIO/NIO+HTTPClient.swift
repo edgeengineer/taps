@@ -108,10 +108,18 @@ public actor HTTP1Client: ClientConnectionProtocol {
     package static func withConnection<T: Sendable>(
         host: String,
         port: Int,
+        tls: TLSClientParameters.TCP?,
         parameters: HTTP1ClientParameters,
         context: TAPSContext,
         perform: @escaping @Sendable (HTTP1Client) async throws -> T
     ) async throws -> T {
+        let tls = try tls.map { _ in
+            try ConnectionSubprotocol.tls(
+                configuration: .clientDefault,
+                serverHostname: host
+            )
+        }
+        
         return try await TCPSocket<
             HTTPResponsePart,
             HTTPRequestPart
@@ -121,6 +129,11 @@ public actor HTTP1Client: ClientConnectionProtocol {
             parameters: parameters.tcp,
             context: context,
             protocolStack: ProtocolStack {
+                IODataDuplexHandler()
+                if let tls {
+                    tls
+                }
+                IODataOutboundDecoder()
                 ConnectionSubprotocol.http1()
             }
         ) { socket in
@@ -164,12 +177,6 @@ public actor HTTP1Client: ClientConnectionProtocol {
                 }
             }
         }
-    }
-}
-
-extension ChannelPipeline.SynchronousOperations {
-    func initializeHTTP1() throws {
-        try self.addHTTPClientHandlers()
     }
 }
 

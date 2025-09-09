@@ -25,7 +25,7 @@ public struct TCPClientService<
     ) {
         self.host = host
         self.port = port
-        self.protocolStack = ProtocolStack {
+        self.protocolStack = ProtocolStack.unverified {
             [NetworkBytesDuplexHandler()] + protocolStack.handlers()
         }
     }

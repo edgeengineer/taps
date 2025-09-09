@@ -30,9 +30,15 @@ public struct ConnectionSubprotocol<
     InboundOut: Sendable,
     OutboundIn: Sendable,
     OutboundOut: Sendable
-> {
+>: @unchecked Sendable {
     #if canImport(NIOCore)
-    let handlers: () -> [any ChannelHandler]
+    var handlers: () -> [any ChannelHandler]
+    
+    internal init() {
+        self.handlers = {
+            []
+        }
+    }
     
     internal init(
         _ inboundIn: InboundIn.Type = InboundIn.self,
@@ -56,12 +62,8 @@ public struct ProtocolStack<
     var handlers: () -> [any ChannelHandler]
     #endif
     
-    public init() {
+    internal init() {
         self.handlers = { [] }
-    }
-    
-    internal init(unverified handlers: @escaping () -> [any ChannelHandler]) {
-        self.handlers = handlers
     }
     
     internal init(
@@ -70,5 +72,15 @@ public struct ProtocolStack<
         self.handlers = {
             build().handlers()
         }
+    }
+}
+
+extension ProtocolStack {
+    internal static func unverified(
+        _ handlers: @escaping () -> [any ChannelHandler]
+    ) -> ProtocolStack {
+        var subprotocol = ProtocolStack()
+        subprotocol.handlers = handlers
+        return subprotocol
     }
 }

@@ -69,6 +69,28 @@ struct HTTP1ClientTests {
             }
         }
     }
+    
+    @Test func testHTTPS1Client() async throws {
+        try await withTAPS { taps in
+            try await taps.withConnection(
+                to: .https1(host: "swiftonserver.com")
+            ) { client in
+                try await client.withResponse(
+                    to: HTTPRequest(
+                        method: .get,
+                        scheme: "https",
+                        authority: "swiftonserver.com",
+                        path: "/"
+                    )
+                ) { response in
+                    print(response.head)
+                    for try await part in response.body {
+                        print(String(bytes: part))
+                    }
+                }
+            }
+        }
+    }
 }
 
 func withTAPS(
