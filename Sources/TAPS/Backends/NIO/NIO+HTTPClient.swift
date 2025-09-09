@@ -21,7 +21,7 @@ internal extension ConnectionSubprotocol<
     ) -> Self {
         return Self {
             HTTPRequestEncoder(configuration: encoderConfiguration)
-            HTTPResponseDecoder(leftOverBytesStrategy: leftOverBytesStrategy)
+            ByteToMessageHandler(HTTPResponseDecoder(leftOverBytesStrategy: leftOverBytesStrategy))
             NIOHTTPRequestHeadersValidator()
             HTTP1ToHTTPClientCodec()
         }

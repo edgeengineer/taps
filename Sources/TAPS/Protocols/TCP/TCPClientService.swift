@@ -13,7 +13,21 @@ public struct TCPClientService<
     public init(host: String, port: Int) where InboundMessage == NetworkInputBytes, OutboundMessage == NetworkOutputBytes {
         self.host = host
         self.port = port
-        self.protocolStack = ProtocolStack()
+        self.protocolStack = ProtocolStack {
+            NetworkBytesDuplexHandler()
+        }
+    }
+    
+    public init(
+        host: String,
+        port: Int,
+        protocolStack: ProtocolStack<NetworkInputBytes, InboundMessage, OutboundMessage, NetworkOutputBytes>
+    ) {
+        self.host = host
+        self.port = port
+        self.protocolStack = ProtocolStack {
+            [NetworkBytesDuplexHandler()] + protocolStack.handlers()
+        }
     }
     
     /// Create TCP client with given parameters
@@ -35,6 +49,9 @@ public struct TCPClientService<
 
 extension ClientServiceProtocol where Self == TCPClientService<NetworkInputBytes, NetworkOutputBytes> {
     public static func tcp(host: String, port: Int) -> TCPClientService<NetworkInputBytes, NetworkOutputBytes> {
-        TCPClientService(host: host, port: port)
+        TCPClientService(
+            host: host,
+            port: port
+        )
     }
 }

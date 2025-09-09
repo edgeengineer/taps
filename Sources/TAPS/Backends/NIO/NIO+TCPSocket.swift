@@ -22,7 +22,7 @@ public struct TCPServer<
         port: Int,
         parameters: TCPServerParameters,
         context: TAPSContext,
-        protocolStack: ProtocolStack<ByteBuffer, InboundMessage, OutboundMessage, ByteBuffer> = ProtocolStack(),
+        protocolStack: ProtocolStack<_NetworkInputBytes, InboundMessage, OutboundMessage, _NetworkOutputBytes> = ProtocolStack(),
         perform: @escaping @Sendable (TCPServer) async throws -> T
     ) async throws -> T {
         let server = try await ServerBootstrap(group: .singletonMultiThreadedEventLoopGroup)
@@ -32,7 +32,7 @@ public struct TCPServer<
             .childChannelOption(.maxMessagesPerRead, value: 1)
             .childChannelInitializer { channel in
                 do {
-                    try channel.pipeline.syncOperations.addHandlers(protocolStack.handlers)
+                    try channel.pipeline.syncOperations.addHandlers(protocolStack.handlers())
                     return channel.eventLoop.makeSucceededVoidFuture()
                 } catch {
                     return channel.eventLoop.makeFailedFuture(error)
@@ -111,7 +111,7 @@ public struct TCPSocket<
             .applyParameters(parameters)
             .channelInitializer { [protocolStack] channel in
                 do {
-                    try channel.pipeline.syncOperations.addHandlers(protocolStack.handlers)
+                    try channel.pipeline.syncOperations.addHandlers(protocolStack.handlers())
                     return channel.eventLoop.makeSucceededVoidFuture()
                 } catch {
                     return channel.eventLoop.makeFailedFuture(error)

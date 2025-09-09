@@ -7,12 +7,26 @@ public struct TCPServerService<
     
     private let host: String
     private let port: Int
-    private let protocolStack: ProtocolStack<NetworkInputBytes, InboundMessage, OutboundMessage, NetworkOutputBytes>
+    private let protocolStack: ProtocolStack<_NetworkInputBytes, InboundMessage, OutboundMessage, _NetworkOutputBytes>
     
     public init(host: String, port: Int) where InboundMessage == NetworkInputBytes, OutboundMessage == NetworkOutputBytes {
         self.host = host
         self.port = port
-        self.protocolStack = ProtocolStack()
+        self.protocolStack = ProtocolStack {
+            NetworkBytesDuplexHandler()
+        }
+    }
+    
+    public init(
+        host: String,
+        port: Int,s
+        protocolStack: ProtocolStack<NetworkInputBytes, InboundMessage, OutboundMessage, NetworkOutputBytes>
+    ) {
+        self.host = host
+        self.port = port
+        self.protocolStack = ProtocolStack {
+            [NetworkBytesDuplexHandler()] + protocolStack.handlers()
+        }
     }
     
     public func withServer<T: Sendable>(
@@ -25,6 +39,7 @@ public struct TCPServerService<
             port: port,
             parameters: parameters,
             context: context,
+            protocolStack: protocolStack,
             perform: perform
         )
     }
