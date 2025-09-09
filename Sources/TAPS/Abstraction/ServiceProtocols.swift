@@ -17,7 +17,7 @@ public protocol ClientServiceProtocol: Sendable {
 }
 
 /// Parameters with default values
-public protocol ServiceParametersWithDefault: Sendable {
+public protocol ParametersWithDefault: Sendable {
     static var defaultParameters: Self { get }
 }
 

@@ -34,7 +34,7 @@ struct TCPUsageTests {
                     try await taps.withConnection(
                         to: .tcp(host: "127.0.0.1", port: 54_123)
                     ) { client in
-                        try await client.send(message)
+                        try await client.send(NetworkOutputBytes(string: message))
                         
                         for try await _ in client.inbound {
                             #expect(Bool(false), "Expected no reply")

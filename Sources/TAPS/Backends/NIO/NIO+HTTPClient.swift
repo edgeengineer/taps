@@ -9,6 +9,25 @@ internal import NIOHTTPTypes
 internal import NIOHTTPTypesHTTP1
 import Logging
 
+internal extension ConnectionSubprotocol<
+    ByteBuffer,
+    HTTPResponsePart,
+    HTTPRequestPart,
+    IOData
+> {
+    static func http1(
+        encoderConfiguration: HTTPRequestEncoder.Configuration = .init(),
+        leftOverBytesStrategy: RemoveAfterUpgradeStrategy = .fireError
+    ) -> Self {
+        return Self {
+            HTTPRequestEncoder(configuration: encoderConfiguration)
+            HTTPResponseDecoder(leftOverBytesStrategy: leftOverBytesStrategy)
+            NIOHTTPRequestHeadersValidator()
+            HTTP1ToHTTPClientCodec()
+        }
+    }
+}
+
 /// TCP Client as proper with real SwiftNIO implementation
 @available(macOS 15.0, *)
 public actor HTTP1Client: ClientConnectionProtocol {
@@ -22,18 +41,25 @@ public actor HTTP1Client: ClientConnectionProtocol {
     }
     
     // Actor-isolated state
-    private nonisolated let inbound: NIOAsyncChannelInboundStream<HTTPClientResponsePart>
-    private nonisolated let outbound: NIOAsyncChannelOutboundWriter<HTTPClientRequestPart>
+    private nonisolated let inbound: NIOAsyncChannelInboundStream<HTTPResponsePart>
+    private nonisolated let outbound: NIOAsyncChannelOutboundWriter<HTTPRequestPart>
     private nonisolated let logger = Logger(label: "engineer.edge.taps.tcp")
     private var responseHandlers = [@Sendable (Response) async throws(ConnectionError) -> Void]()
     
     /// Initialize TCP client with endpoint and parameters
     internal init(
-        inbound: NIOAsyncChannelInboundStream<HTTPClientResponsePart>,
-        outbound: NIOAsyncChannelOutboundWriter<HTTPClientRequestPart>
+        inbound: NIOAsyncChannelInboundStream<HTTPResponsePart>,
+        outbound: NIOAsyncChannelOutboundWriter<HTTPRequestPart>
     ) {
         self.inbound = inbound
         self.outbound = outbound
+    }
+    
+    internal init(
+        socket: TCPSocket<HTTPResponsePart, HTTPRequestPart>
+    ) {
+        self.inbound = socket._inbound
+        self.outbound = socket.outbound
     }
     
     public func run() async throws {
@@ -54,7 +80,7 @@ public actor HTTP1Client: ClientConnectionProtocol {
                 
                 group.addTask {
                     do {
-                        try await handler(Response(head: HTTPResponse(head), body: body))
+                        try await handler(Response(head: head, body: body))
                     } catch is ConnectionError {
                         // TODO: body.fail(error)
                         body.finish()
@@ -86,20 +112,19 @@ public actor HTTP1Client: ClientConnectionProtocol {
         context: TAPSContext,
         perform: @escaping @Sendable (HTTP1Client) async throws -> T
     ) async throws -> T {
-        // Bootstrap TCP connection with simpler pipeline
-        let channel = try await ClientBootstrap(group: MultiThreadedEventLoopGroup.singleton)
-            .applyParameters(parameters.tcp)
-            .channelInitializer { channel in
-                channel.pipeline.addHTTPClientHandlers()
+        return try await TCPSocket<
+            HTTPResponsePart,
+            HTTPRequestPart
+        >.withClientConnection(
+            host: host,
+            port: port,
+            parameters: parameters.tcp,
+            context: context,
+            protocolStack: ProtocolStack {
+                ConnectionSubprotocol.http1()
             }
-            .connect(host: host, port: port)
-            .flatMapThrowing { channel in
-                try NIOAsyncChannel<HTTPClientResponsePart, HTTPClientRequestPart>(wrappingChannelSynchronously: channel)
-            }
-            .get()
-        
-        return try await channel.executeThenClose { inbound, outbound in
-            return try await perform(HTTP1Client(inbound: inbound, outbound: outbound))
+        ) { socket in
+            return try await perform(HTTP1Client(socket: socket))
         }
     }
     
@@ -107,19 +132,10 @@ public actor HTTP1Client: ClientConnectionProtocol {
         _ request: HTTPRequest,
         body: some AsyncSequence<NetworkOutputBytes, BodyError> & Sendable
     ) async throws {
-        try await self.outbound.write(
-            .head(
-                HTTPRequestHead(
-                    version: .http1_1,
-                    method: HTTPMethod(request.method),
-                    uri: request.path ?? "/",
-                    headers: HTTPHeaders(request.headerFields)
-                )
-            )
-        )
+        try await self.outbound.write(.head(request))
         
         for try await part in body {
-            try await self.outbound.write(.body(.byteBuffer(part.buffer)))
+            try await self.outbound.write(.body(part.buffer))
         }
         
         try await self.outbound.write(.end(nil))
@@ -148,6 +164,12 @@ public actor HTTP1Client: ClientConnectionProtocol {
                 }
             }
         }
+    }
+}
+
+extension ChannelPipeline.SynchronousOperations {
+    func initializeHTTP1() throws {
+        try self.addHTTPClientHandlers()
     }
 }
 

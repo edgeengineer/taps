@@ -19,8 +19,11 @@ let package = Package(
         )
     ],
     dependencies: [
+        // Private dependencies
         .package(url: "https://github.com/apple/swift-nio.git", from: "2.86.0"),
         .package(url: "https://github.com/apple/swift-nio-extras.git", from: "1.29.0"),
+        .package(url: "https://github.com/apple/swift-nio-ssl.git", from: "2.34.0"),
+        // Public dependencies
         .package(url: "https://github.com/apple/swift-http-types.git", from: "1.4.0"),
         .package(url: "https://github.com/apple/swift-async-algorithms.git", from: "1.0.0"),
         .package(url: "https://github.com/apple/swift-argument-parser", from: "1.4.0"),
@@ -38,6 +41,7 @@ let package = Package(
                 .product(name: "NIOHTTPCompression", package: "swift-nio-extras"),
                 .product(name: "NIOHTTPTypes", package: "swift-nio-extras"),
                 .product(name: "NIOHTTPTypesHTTP1", package: "swift-nio-extras"),
+                .product(name: "NIOSSL", package: "swift-nio-ssl"),
                 // Public dependencies
                 .product(name: "HTTPTypes", package: "swift-http-types"),
                 .product(name: "AsyncAlgorithms", package: "swift-async-algorithms"),

@@ -21,7 +21,7 @@ public actor TAPS {
     public func withConnection<Service: ClientServiceProtocol, T: Sendable>(
         to service: Service,
         _ operation: @Sendable @escaping (Service.Client) async throws -> T
-    ) async throws -> T where Service.Parameters: ServiceParametersWithDefault {
+    ) async throws -> T where Service.Parameters: ParametersWithDefault {
         return try await withConnection(
             to: service,
             parameters: Service.Parameters.defaultParameters,
@@ -55,7 +55,7 @@ public actor TAPS {
     public nonisolated func withServer<Service: ServerServiceProtocol>(
         on service: Service,
         acceptClient: @Sendable @escaping (Service.Server.Client) async throws -> Void
-    ) async throws where Service.Parameters: ServiceParametersWithDefault {
+    ) async throws where Service.Parameters: ParametersWithDefault {
         try await withServer(
             on: service,
             parameters: Service.Parameters.defaultParameters,

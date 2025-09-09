@@ -4,21 +4,25 @@ internal import NIOCore
 internal import NIOPosix
 import Logging
 
-public struct TCPServer: ServerConnectionProtocol {
-    public typealias Client = TCPSocket
+public struct TCPServer<
+    InboundMessage: Sendable,
+    OutboundMessage: Sendable
+>: ServerConnectionProtocol {
+    public typealias Client = TCPSocket<InboundMessage, OutboundMessage>
     public typealias ConnectionError = any Error
 
-    private nonisolated let inbound: NIOAsyncChannelInboundStream<NIOAsyncChannel<ByteBuffer, ByteBuffer>>
+    private nonisolated let inbound: NIOAsyncChannelInboundStream<NIOAsyncChannel<InboundMessage, OutboundMessage>>
 
-    private init(inbound: NIOAsyncChannelInboundStream<NIOAsyncChannel<ByteBuffer, ByteBuffer>>) {
+    private init(inbound: NIOAsyncChannelInboundStream<NIOAsyncChannel<InboundMessage, OutboundMessage>>) {
         self.inbound = inbound
     }
 
-    package static func withServer<T: Sendable>(
+    internal static func withServer<T: Sendable>(
         host: String,
         port: Int,
         parameters: TCPServerParameters,
         context: TAPSContext,
+        protocolStack: ProtocolStack<ByteBuffer, InboundMessage, OutboundMessage, ByteBuffer> = ProtocolStack(),
         perform: @escaping @Sendable (TCPServer) async throws -> T
     ) async throws -> T {
         let server = try await ServerBootstrap(group: .singletonMultiThreadedEventLoopGroup)
@@ -26,9 +30,20 @@ public struct TCPServer: ServerConnectionProtocol {
             .serverChannelOption(.socketOption(.so_reuseaddr), value: 1)
             .childChannelOption(.socketOption(.so_reuseaddr), value: 1)
             .childChannelOption(.maxMessagesPerRead, value: 1)
+            .childChannelInitializer { channel in
+                do {
+                    try channel.pipeline.syncOperations.addHandlers(protocolStack.handlers)
+                    return channel.eventLoop.makeSucceededVoidFuture()
+                } catch {
+                    return channel.eventLoop.makeFailedFuture(error)
+                }
+            }
             .bind(host: host, port: port) { client in
                 return client.eventLoop.submit {
-                    try NIOAsyncChannel<ByteBuffer, ByteBuffer>(wrappingChannelSynchronously: client)
+                    try NIOAsyncChannel<
+                        InboundMessage,
+                        OutboundMessage
+                    >(wrappingChannelSynchronously: client)
                 }
             }
 
@@ -55,26 +70,25 @@ public struct TCPServer: ServerConnectionProtocol {
 
 /// TCP Client as proper with real SwiftNIO implementation
 @available(macOS 15.0, *)
-public struct TCPSocket: ClientConnectionProtocol {
-    public typealias InboundMessage = NetworkInputBytes
-    public typealias OutboundMessage = NetworkOutputBytes
+public struct TCPSocket<
+    InboundMessage: Sendable,
+    OutboundMessage: Sendable
+>: ClientConnectionProtocol {
     public typealias ConnectionError = any Error
     
     // Actor-isolated state
-    private nonisolated let _inbound: NIOAsyncChannelInboundStream<ByteBuffer>
-    private nonisolated let outbound: NIOAsyncChannelOutboundWriter<ByteBuffer>
+    internal nonisolated let _inbound: NIOAsyncChannelInboundStream<InboundMessage>
+    internal nonisolated let outbound: NIOAsyncChannelOutboundWriter<OutboundMessage>
     private nonisolated let logger = Logger(label: "engineer.edge.taps.tcp")
     
     public nonisolated var inbound: some AsyncSequence<InboundMessage, ConnectionError> {
-        _inbound.map { buffer in
-            NetworkInputBytes(buffer: buffer)
-        }
+        _inbound
     }
     
     /// Initialize TCP client with endpoint and parameters
     internal init(
-        inbound: NIOAsyncChannelInboundStream<ByteBuffer>,
-        outbound: NIOAsyncChannelOutboundWriter<ByteBuffer>
+        inbound: NIOAsyncChannelInboundStream<InboundMessage>,
+        outbound: NIOAsyncChannelOutboundWriter<OutboundMessage>
     ) {
         self._inbound = inbound
         self.outbound = outbound
@@ -83,48 +97,46 @@ public struct TCPSocket: ClientConnectionProtocol {
     public func run() async throws {
         // TODO: Do we need to keep `run()` active in the background?
     }
-
-    package static func withClientConnection<T: Sendable>(
+    
+    internal static func withClientConnection<T: Sendable>(
         host: String,
         port: Int,
         parameters: TCPClientParameters,
         context: TAPSContext,
-        perform: @escaping @Sendable (TCPSocket) async throws -> T
+        protocolStack: ProtocolStack<ByteBuffer, InboundMessage, OutboundMessage, IOData> = ProtocolStack(),
+        perform: @escaping @Sendable (TCPSocket<InboundMessage, OutboundMessage>) async throws -> T
     ) async throws -> T {
         // Bootstrap TCP connection with simpler pipeline
         let channel = try await ClientBootstrap(group: .singletonMultiThreadedEventLoopGroup)
             .applyParameters(parameters)
+            .channelInitializer { [protocolStack] channel in
+                do {
+                    try channel.pipeline.syncOperations.addHandlers(protocolStack.handlers)
+                    return channel.eventLoop.makeSucceededVoidFuture()
+                } catch {
+                    return channel.eventLoop.makeFailedFuture(error)
+                }
+            }
             .connect(host: host, port: port)
             .flatMapThrowing { channel in
-                try NIOAsyncChannel<ByteBuffer, ByteBuffer>(wrappingChannelSynchronously: channel)
+                try NIOAsyncChannel<InboundMessage, OutboundMessage>(wrappingChannelSynchronously: channel)
             }
             .get()
         
-        return try await channel.executeThenClose { inbound, outbound in
-            return try await perform(TCPSocket(inbound: inbound, outbound: outbound))
+        return try await channel.executeThenClose {
+            inbound,
+            outbound in
+            return try await perform(
+                TCPSocket(
+                    inbound: inbound,
+                    outbound: outbound
+                )
+            )
         }
     }
     
-    /// Send a message
-    #if swift(>=6.2)
-    public func send(_ message: borrowing Span<UInt8>) async throws {
-        // SwiftNIO needs ownership over memory, copy over
-        // In the future we want a RecvAllocator as to not allocate from scratch
-        let buffer = message.withUnsafeBytes { buffer in
-            ByteBuffer(bytes: buffer)
-        }
-        try await outbound.write(buffer)
-    }
-    #endif
-    
-    /// Convenience method for sending string messages
-    public func send(_ string: String) async throws {
-        try await outbound.write(ByteBuffer(string: string))
-    }
-    
-    /// Convenience method for sending string messages
-    public func send(_ bytes: [UInt8]) async throws {
-        try await outbound.write(ByteBuffer(bytes: bytes))
+    public func send(_ message: OutboundMessage) async throws {
+        try await outbound.write(message)
     }
 }
 #endif
