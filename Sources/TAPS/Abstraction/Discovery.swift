@@ -1,23 +1,31 @@
 public protocol PeerDiscoveryMechanism<Reference, Peer>: Sendable {
     associatedtype Reference: Sendable
     associatedtype Peer: Sendable
-    associatedtype Peers: Collection<Peer> & Sendable = [Peer]
-    
-    func discover(_ reference: Reference) async throws -> Peers
+
+    func withDiscovery(
+        of reference: Reference,
+        pollingInterval: Duration?,
+        handleResults: @Sendable ([Peer]) async throws -> Void
+    ) async throws
+}
+
+fileprivate actor Output<Peer: Sendable> {
+    var peers = [Peer]()
+    func update(to peers: [Peer]) {
+        self.peers = peers
+    }
 }
 
 extension PeerDiscoveryMechanism {
-    public nonisolated func withDiscovery(
-        of reference: Reference,
-        pollingInterval: Duration = .seconds(5),
-        handleResults: @Sendable (Peers) async throws -> Void
-    ) async throws {
-        while !Task.isCancelled {
-            let peers = try await discover(reference)
-            try await handleResults(peers)
-            
-            try await Task.sleep(for: pollingInterval)
+    public func discover(_ reference: Reference) async throws -> [Peer] {
+        let output = Output<Peer>()
+        try await withDiscovery(
+            of: reference,
+            pollingInterval: nil
+        ) { results in
+            await output.update(to: results)
         }
+        return await output.peers
     }
 }
 

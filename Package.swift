@@ -23,6 +23,8 @@ let package = Package(
         .package(url: "https://github.com/apple/swift-nio.git", from: "2.86.0"),
         .package(url: "https://github.com/apple/swift-nio-extras.git", from: "1.29.0"),
         .package(url: "https://github.com/apple/swift-nio-ssl.git", from: "2.34.0"),
+        .package(url: "https://github.com/PureSwift/Bluetooth.git", from: "7.2.3"),
+        .package(url: "https://github.com/PureSwift/GATT.git", from: "3.3.1"),
         // Public dependencies
         .package(url: "https://github.com/apple/swift-http-types.git", from: "1.4.0"),
         .package(url: "https://github.com/apple/swift-async-algorithms.git", from: "1.0.0"),
@@ -31,6 +33,9 @@ let package = Package(
         .package(url: "https://github.com/apple/swift-async-dns-resolver.git", from: "0.4.0"),
     ],
     targets: [
+        .executableTarget(name: "TAPSExample", dependencies: [
+            "TAPS"
+        ]),
         .target(
             name: "TAPS",
             dependencies: [
@@ -44,6 +49,9 @@ let package = Package(
                 .product(name: "NIOHTTPTypesHTTP1", package: "swift-nio-extras"),
                 .product(name: "AsyncDNSResolver", package: "swift-async-dns-resolver"),
                 .product(name: "NIOSSL", package: "swift-nio-ssl"),
+                .product(name: "Bluetooth", package: "Bluetooth"),
+                .product(name: "GATT", package: "GATT", condition: .when(platforms: [.macOS, .linux])),
+                .product(name: "DarwinGATT", package: "GATT", condition: .when(platforms: [.macOS])),
                 // Public dependencies
                 .product(name: "HTTPTypes", package: "swift-http-types"),
                 .product(name: "AsyncAlgorithms", package: "swift-async-algorithms"),
