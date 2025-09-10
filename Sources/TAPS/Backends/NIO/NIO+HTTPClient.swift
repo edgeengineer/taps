@@ -43,8 +43,8 @@ public actor HTTP1Client: ClientConnectionProtocol {
     // Actor-isolated state
     private nonisolated let inbound: NIOAsyncChannelInboundStream<HTTPResponsePart>
     private nonisolated let outbound: NIOAsyncChannelOutboundWriter<HTTPRequestPart>
-    private nonisolated let logger = Logger(label: "engineer.edge.taps.tcp")
-    private var responseHandlers = [@Sendable (Response) async throws(ConnectionError) -> Void]()
+    private nonisolated let logger = Logger(label: "engineer.edge.taps.http1")
+    private var responseHandlers = [@Sendable (Result<Response, any Error>) async throws(ConnectionError) -> Void]()
     
     /// Initialize TCP client with endpoint and parameters
     internal init(
@@ -63,44 +63,55 @@ public actor HTTP1Client: ClientConnectionProtocol {
     }
     
     public func run() async throws {
-        try await withThrowingDiscardingTaskGroup { group in
-            var iterator = inbound.makeAsyncIterator()
-            
-            nextResponse: while !Task.isCancelled {
-                guard
-                    case .head(let head) = try await iterator.next(),
-                    !responseHandlers.isEmpty
-                else {
-                    // Protocol error
-                    throw ConnectionError()
-                }
+        do {
+            try await withThrowingDiscardingTaskGroup { group in
+                var iterator = inbound.makeAsyncIterator()
                 
-                let handler = responseHandlers.removeFirst()
-                let body = AsyncThrowingChannel<NetworkInputBytes, ConnectionError>()
-                
-                group.addTask {
-                    do {
-                        try await handler(Response(head: head, body: body))
-                    } catch is ConnectionError {
-                        // TODO: body.fail(error)
-                        body.finish()
-                    }
-                }
-                
-                defer { body.finish() }
-                while let next = try await iterator.next() {
-                    switch next {
-                    case .head:
+                nextResponse: while !Task.isCancelled {
+                    guard
+                        case .head(let head) = try await iterator.next(),
+                        !responseHandlers.isEmpty
+                    else {
                         // Protocol error
                         throw ConnectionError()
-                    case .body(let buffer):
-                        await body.send(NetworkInputBytes(buffer: buffer))
-                    case .end:
-                        return
                     }
+                    
+                    let handler = responseHandlers.removeFirst()
+                    let body = AsyncThrowingChannel<NetworkInputBytes, ConnectionError>()
+                    
+                    group.addTask {
+                        do {
+                            let response = Response(head: head, body: body)
+                            try await handler(.success(response))
+                        } catch is ConnectionError {
+                            // TODO: body.fail(error)
+                            body.finish()
+                        }
+                    }
+                    
+                    defer { body.finish() }
+                    while let next = try await iterator.next() {
+                        switch next {
+                        case .head:
+                            // Protocol error
+                            throw ConnectionError()
+                        case .body(let buffer):
+                            await body.send(NetworkInputBytes(buffer: buffer))
+                        case .end:
+                            return
+                        }
+                    }
+                    
+                    throw CancellationError()
                 }
-                
-                throw CancellationError()
+            }
+            
+            for handler in responseHandlers {
+                try? await handler(.failure(CancellationError()))
+            }
+        } catch {
+            for handler in responseHandlers {
+                try? await handler(.failure(error))
             }
         }
     }
@@ -168,7 +179,7 @@ public actor HTTP1Client: ClientConnectionProtocol {
             return try await withCheckedThrowingContinuation { continuation in
                 self.responseHandlers.append { response throws(ConnectionError) -> Void in
                     do {
-                        let result = try await perform(response)
+                        let result = try await perform(response.get())
                         continuation.resume(returning: result)
                     } catch {
                         continuation.resume(throwing: error)
