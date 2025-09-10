@@ -1,4 +1,4 @@
-public struct TCPSocketParameters: ServiceParametersWithDefault {
+public struct TCPSocketParameters: ParametersWithDefault {
     public var keepAlive: Bool
     public var noDelay: Bool
     

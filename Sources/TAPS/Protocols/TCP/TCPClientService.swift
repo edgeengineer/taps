@@ -1,14 +1,33 @@
 /// TCP service implementing ClientServiceProtocol
-public struct TCPClientService: ClientServiceProtocol {
+public struct TCPClientService<
+    InboundMessage: Sendable,
+    OutboundMessage: Sendable
+>: ClientServiceProtocol {
     public typealias Parameters = TCPClientParameters
-    public typealias Client = TCPSocket
+    public typealias Client = TCPSocket<InboundMessage, OutboundMessage>
     
     private let host: String
     private let port: Int
+    private let protocolStack: ProtocolStack<_NetworkInputBytes, InboundMessage, OutboundMessage, _NetworkOutputBytes>
     
-    public init(host: String, port: Int) {
+    public init(host: String, port: Int) where InboundMessage == NetworkInputBytes, OutboundMessage == NetworkOutputBytes {
         self.host = host
         self.port = port
+        self.protocolStack = ProtocolStack {
+            NetworkBytesDuplexHandler()
+        }
+    }
+    
+    public init(
+        host: String,
+        port: Int,
+        protocolStack: ProtocolStack<NetworkInputBytes, InboundMessage, OutboundMessage, NetworkOutputBytes>
+    ) {
+        self.host = host
+        self.port = port
+        self.protocolStack = ProtocolStack {
+            [NetworkBytesDuplexHandler()] + protocolStack.handlers()
+        }
     }
     
     /// Create TCP client with given parameters
@@ -17,18 +36,22 @@ public struct TCPClientService: ClientServiceProtocol {
         context: TAPSContext,
         perform: @escaping @Sendable (Client) async throws -> T
     ) async throws -> T {
-        return try await TCPSocket.withClientConnection(
+        return try await Client.withClientConnection(
             host: host,
             port: port,
             parameters: parameters,
             context: context,
+            protocolStack: protocolStack,
             perform: perform
         )
     }
 }
 
-extension ClientServiceProtocol where Self == TCPClientService {
-    public static func tcp(host: String, port: Int) -> TCPClientService {
-        TCPClientService(host: host, port: port)
+extension ClientServiceProtocol where Self == TCPClientService<NetworkInputBytes, NetworkOutputBytes> {
+    public static func tcp(host: String, port: Int) -> TCPClientService<NetworkInputBytes, NetworkOutputBytes> {
+        TCPClientService(
+            host: host,
+            port: port
+        )
     }
 }

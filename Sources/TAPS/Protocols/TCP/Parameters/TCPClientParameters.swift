@@ -1,4 +1,4 @@
-public struct TCPClientParameters: ServiceParametersWithDefault {
+public struct TCPClientParameters: ParametersWithDefault {
     public var connectionTimeout: Duration
     public var socketParameters: TCPSocketParameters
     

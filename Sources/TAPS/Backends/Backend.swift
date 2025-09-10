@@ -1,11 +1,15 @@
 #if canImport(NIOCore)
 internal import NIOCore
 
-typealias NetworkBytes = ByteBuffer
+typealias _NetworkBytes = ByteBuffer
+typealias _NetworkInputBytes = ByteBuffer
+typealias _NetworkOutputBytes = IOData
 #elseif canImport(Network)
 import Foundation
 
-typealias NetworkBytes = Data
+typealias _NetworkBytes = Data
+typealias _NetworkInputBytes = Data
+typealias _NetworkOutputBytes = Data
 #endif
 
 public enum Endianness: Sendable {
@@ -28,7 +32,7 @@ public struct NetworkInputBytes: Sendable {
         case unknown
     }
     
-    internal var buffer: NetworkBytes
+    internal var buffer: _NetworkBytes
     
     public var isEmpty: Bool {
         buffer.readableBytes == 0
@@ -59,7 +63,15 @@ public struct NetworkOutputBytes: Sendable {
         case lengthPrefixSpaceExceeded
     }
     
-    internal var buffer: NetworkBytes
+    internal var buffer: _NetworkBytes
+    
+    internal init(buffer: _NetworkBytes) {
+        self.buffer = buffer
+    }
+    
+    public init(string: String) {
+        self.buffer = _NetworkBytes(string: string)
+    }
     
     public mutating func writeLengthPrefixed<F: FixedWidthInteger>(
         endianness: Endianness,

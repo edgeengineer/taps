@@ -1,4 +1,4 @@
-public struct TCPServerParameters: ServiceParametersWithDefault {
+public struct TCPServerParameters: ParametersWithDefault {
     public var backlog: Int32
     public var socketParameters: TCPSocketParameters
     
