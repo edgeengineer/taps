@@ -28,6 +28,7 @@ let package = Package(
         .package(url: "https://github.com/apple/swift-async-algorithms.git", from: "1.0.0"),
         .package(url: "https://github.com/apple/swift-argument-parser", from: "1.4.0"),
         .package(url: "https://github.com/apple/swift-log.git", from: "1.4.0"),
+        .package(url: "https://github.com/apple/swift-async-dns-resolver.git", from: "0.4.0"),
     ],
     targets: [
         .target(
@@ -41,6 +42,7 @@ let package = Package(
                 .product(name: "NIOHTTPCompression", package: "swift-nio-extras"),
                 .product(name: "NIOHTTPTypes", package: "swift-nio-extras"),
                 .product(name: "NIOHTTPTypesHTTP1", package: "swift-nio-extras"),
+                .product(name: "AsyncDNSResolver", package: "swift-async-dns-resolver"),
                 .product(name: "NIOSSL", package: "swift-nio-ssl"),
                 // Public dependencies
                 .product(name: "HTTPTypes", package: "swift-http-types"),

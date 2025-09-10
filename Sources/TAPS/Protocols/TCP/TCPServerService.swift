@@ -46,7 +46,10 @@ public struct TCPServerService<
 }
 
 extension ServerServiceProtocol where Self == TCPServerService<NetworkInputBytes, NetworkOutputBytes> {
-    public static func tcp(host: String, port: Int) -> TCPServerService<NetworkInputBytes, NetworkOutputBytes> {
+    public static func tcp(
+        host: String = "0.0.0.0",
+        port: Int
+    ) -> TCPServerService<NetworkInputBytes, NetworkOutputBytes> {
         TCPServerService(host: host, port: port)
     }
 }
