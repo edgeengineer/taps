@@ -8,17 +8,18 @@
 internal import NIO
 
 @resultBuilder internal struct ProtocolStackBuilder<InboundOut, OutboundOut> {
+    // MARK: First block handlers
     @_disfavoredOverload
     internal static func buildPartialBlock<PartialInboundOut, PartialOutboundIn>(
         first subprotocol: ConnectionSubprotocol<InboundOut, PartialInboundOut, PartialOutboundIn, OutboundOut>
     ) -> ProtocolStack<InboundOut, PartialInboundOut, PartialOutboundIn, OutboundOut> {
-        ProtocolStack<_, _, _, _>(unverified: subprotocol.handlers)
+        ProtocolStack.unverified(subprotocol.handlers)
     }
     
     internal static func buildPartialBlock<Handler: ChannelDuplexHandler>(
         first handler: Handler
     ) -> ProtocolStack<InboundOut, Handler.InboundOut, Handler.OutboundIn, OutboundOut> {
-        ProtocolStack<_, _, _, _> {
+        ProtocolStack.unverified {
             [handler]
         }
     }
@@ -27,7 +28,7 @@ internal import NIO
     internal static func buildPartialBlock<Handler: ChannelInboundHandler>(
         first handler: Handler
     ) -> ProtocolStack<InboundOut, Handler.InboundOut, OutboundOut, OutboundOut> where InboundOut == Handler.InboundIn {
-        ProtocolStack<_, _, _, _> {
+        ProtocolStack.unverified {
             [handler]
         }
     }
@@ -36,11 +37,12 @@ internal import NIO
     internal static func buildPartialBlock<Handler: ChannelOutboundHandler>(
         first handler: Handler
     ) -> ProtocolStack<InboundOut, InboundOut, Handler.OutboundIn, OutboundOut> where OutboundOut == Handler.OutboundOut {
-        ProtocolStack<_, _, _, _> {
+        ProtocolStack.unverified {
             [handler]
         }
     }
     
+    // MARK: Accumulated Handlers (non-optional)
     internal static func buildPartialBlock<
         Handler: ChannelDuplexHandler
     >(
@@ -48,8 +50,38 @@ internal import NIO
         next handler: Handler
     ) -> ProtocolStack<InboundOut, Handler.InboundOut, Handler.OutboundIn, OutboundOut>
     {
-        ProtocolStack<_, _, _, _> {
+        ProtocolStack.unverified {
             base.handlers() + [handler]
+        }
+    }
+    
+    internal static func buildPartialBlock<
+        PreviousInboundOut,
+        PreviousOutboundIn,
+        NewInboundOut,
+        NewOutboundIn
+    >(
+        accumulated base: ProtocolStack<InboundOut, PreviousInboundOut, PreviousOutboundIn, OutboundOut>,
+        next stack: ProtocolStack<PreviousInboundOut, NewInboundOut, NewOutboundIn, PreviousOutboundIn>
+    ) -> ProtocolStack<InboundOut, NewInboundOut, NewOutboundIn, OutboundOut>
+    {
+        ProtocolStack.unverified {
+            base.handlers() + stack.handlers()
+        }
+    }
+    
+    internal static func buildPartialBlock<
+        PreviousInboundOut,
+        PreviousOutboundIn,
+        NewInboundOut,
+        NewOutboundIn
+    >(
+        accumulated base: ProtocolStack<InboundOut, PreviousInboundOut, PreviousOutboundIn, OutboundOut>,
+        next stack: ConnectionSubprotocol<PreviousInboundOut, NewInboundOut, NewOutboundIn, PreviousOutboundIn>
+    ) -> ProtocolStack<InboundOut, NewInboundOut, NewOutboundIn, OutboundOut>
+    {
+        ProtocolStack.unverified {
+            base.handlers() + stack.handlers()
         }
     }
     
@@ -62,7 +94,7 @@ internal import NIO
         next handler: Handler
     ) -> ProtocolStack<InboundOut, Handler.InboundOut, PartialOut, OutboundOut> where PartialIn == Handler.InboundIn
     {
-        ProtocolStack<_, _, _, _> {
+        ProtocolStack.unverified {
             base.handlers() + [handler]
         }
     }
@@ -76,7 +108,7 @@ internal import NIO
         next handler: Handler
     ) -> ProtocolStack<InboundOut, PartialIn, Handler.OutboundIn, OutboundOut> where PartialOut == Handler.OutboundOut
     {
-        ProtocolStack<_, _, _, _> {
+        ProtocolStack.unverified {
             base.handlers() + [handler]
         }
     }
@@ -86,7 +118,7 @@ internal import NIO
         accumulated base: ProtocolStack<InboundOut, ByteBuffer, PartialOut, OutboundOut>,
         next decoder: Decoder
     ) -> ProtocolStack<InboundOut, Decoder.InboundOut, PartialOut, OutboundOut> {
-        ProtocolStack<_, _, _, _> {
+        ProtocolStack.unverified {
             base.handlers() + [ByteToMessageHandler(decoder)]
         }
     }
@@ -96,10 +128,89 @@ internal import NIO
         accumulated base: ProtocolStack<InboundOut, PartialIn, ByteBuffer, OutboundOut>,
         next encoder: Encoder
     ) -> ProtocolStack<InboundOut, PartialIn, Encoder.OutboundIn, OutboundOut> {
-        ProtocolStack<_, _, _, _> {
+        ProtocolStack.unverified {
             base.handlers() + [MessageToByteHandler(encoder)]
         }
     }
+    
+    // MARK: Optional handlers
+    internal static func buildOptional<T>(_ component: T?) -> T? {
+        component
+    }
+    
+    internal static func buildPartialBlock<
+        Handler: ChannelDuplexHandler
+    >(
+        accumulated base: ProtocolStack<InboundOut, Handler.InboundIn, Handler.OutboundOut, OutboundOut>,
+        next handler: Handler?
+    ) -> ProtocolStack<InboundOut, Handler.InboundOut, Handler.OutboundIn, OutboundOut>
+    where Handler.InboundIn == Handler.InboundOut, Handler.OutboundIn == Handler.OutboundOut
+    {
+        ProtocolStack.unverified {
+            if let handler {
+                return base.handlers() + [handler]
+            } else {
+                return base.handlers()
+            }
+        }
+    }
+    
+    @_disfavoredOverload
+    internal static func buildPartialBlock<
+        PartialOutboundIn,
+        Handler: ChannelInboundHandler
+    >(
+        accumulated base: ProtocolStack<InboundOut, PartialOutboundIn, Handler.OutboundOut, OutboundOut>,
+        next handler: Handler?
+    ) -> ProtocolStack<InboundOut, Handler.InboundOut, PartialOutboundIn, OutboundOut>
+    where Handler.InboundIn == Handler.InboundOut
+    {
+        ProtocolStack.unverified {
+            if let handler {
+                return base.handlers() + [handler]
+            } else {
+                return base.handlers()
+            }
+        }
+    }
+    
+    @_disfavoredOverload
+    internal static func buildPartialBlock<
+        PartialInboundOut,
+        Handler: ChannelOutboundHandler
+    >(
+        accumulated base: ProtocolStack<InboundOut, PartialInboundOut, Handler.OutboundOut, OutboundOut>,
+        next handler: Handler?
+    ) -> ProtocolStack<InboundOut, PartialInboundOut, Handler.OutboundIn, OutboundOut>
+    where Handler.OutboundIn == Handler.OutboundOut
+    {
+        ProtocolStack.unverified {
+            if let handler {
+                return base.handlers() + [handler]
+            } else {
+                return base.handlers()
+            }
+        }
+    }
+    
+    internal static func buildPartialBlock<
+        PartialInboundOut,
+        PartialOutboundIn
+    >(
+        accumulated base: ProtocolStack<InboundOut, PartialInboundOut, PartialOutboundIn, OutboundOut>,
+        next stack: ProtocolStack<InboundOut, PartialInboundOut, PartialOutboundIn, OutboundOut>?
+    ) -> ProtocolStack<InboundOut, PartialInboundOut, PartialOutboundIn, OutboundOut>
+    {
+        ProtocolStack.unverified {
+            if let stack {
+                return base.handlers() + stack.handlers()
+            } else {
+                return base.handlers()
+            }
+        }
+    }
+    
+    // MARK: Final result
     
     internal static func buildFinalResult<Input, Output>(
         _ component: ProtocolStack<InboundOut, Output, Input, OutboundOut>
