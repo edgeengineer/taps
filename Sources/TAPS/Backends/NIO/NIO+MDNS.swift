@@ -1,6 +1,6 @@
 internal import AsyncDNSResolver
 
-public actor MDNSClient: PeerDiscoveryMechanism {
+public actor MDNSClient: PeerDiscoveryMechanismProtocol {
     public struct Reference: Sendable {
         internal enum Underlying: Sendable {
             case ptr(String)
@@ -22,7 +22,7 @@ public actor MDNSClient: PeerDiscoveryMechanism {
         public let port: Int
     }
     
-    private init() {}
+    fileprivate init() {}
     
     public static func withMDNS<T: Sendable>(
         perform: (MDNSClient) async throws -> T
@@ -88,6 +88,14 @@ public actor MDNSClient: PeerDiscoveryMechanism {
             } else {
                 return
             }
+        }
+    }
+}
+
+extension PeerDiscoveryMechanism where Mechanism == MDNSClient {
+    public static var mdns: PeerDiscoveryMechanism<MDNSClient> {
+        PeerDiscoveryMechanism { context in
+            MDNSClient()
         }
     }
 }

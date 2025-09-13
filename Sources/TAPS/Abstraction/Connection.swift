@@ -2,22 +2,21 @@
 // Actor-based connection protocols
 
 import AsyncAlgorithms
+import ServiceLifecycle
 #if canImport(NIOCore)
 internal import NIOCore
 #endif
 
 /// Base protocol for all connection types
-public protocol ClientConnectionProtocol<InboundMessage, OutboundMessage>: Sendable {
+public protocol DuplexClientProtocol<InboundMessage, OutboundMessage>: ServiceLifecycle.Service, Sendable {
     associatedtype InboundMessage: Sendable
     associatedtype OutboundMessage: Sendable
     associatedtype ConnectionError: Swift.Error
-    
-    func run() async throws
 }
 
 /// Protocol for server connections that accept clients
-public protocol ServerConnectionProtocol<Client>: Sendable {
-    associatedtype Client: ClientConnectionProtocol
+public protocol DuplexServerProtocol<Client>: Sendable {
+    associatedtype Client: DuplexClientProtocol
     associatedtype ConnectionError: Error
     
     func withEachClient(

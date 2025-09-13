@@ -5,9 +5,19 @@ import Logging
 @available(macOS 15.0, *)
 public actor TAPS {
     private let logger = Logger(label: "engineer.edge.taps.main")
+    private let tapsContext: TAPSContext
     
     /// Initialize TAPS instance
-    public init() {}
+    public init() async throws {
+        #if canImport(DarwinGATT)
+        self.tapsContext = try await TAPSContext(
+            bluetoothPeripheral: BluetoothPeripheral(),
+            bluetoothCentral: BluetoothCentral()
+        )
+        #else
+        self.tapsContext = TAPSContext()
+        #endif
+    }
     
     /// Run TAPS as a service
     public func run() async throws {
@@ -37,7 +47,7 @@ public actor TAPS {
     ) async throws -> T {
         return try await service.withConnection(
             parameters: parameters,
-            context: TAPSContext()
+            context: self.tapsContext
         ) { client in
             try await withThrowingTaskGroup(of: Void.self) { taskGroup in
                 taskGroup.addTask {
@@ -70,7 +80,7 @@ public actor TAPS {
     ) async throws {
         try await service.withServer(
             parameters: parameters,
-            context: TAPSContext()
+            context: self.tapsContext
         ) { server in
             try await server.withEachClient { client throws(CancellationError) in
                 do {

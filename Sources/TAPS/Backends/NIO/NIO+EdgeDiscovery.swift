@@ -1,11 +1,12 @@
 internal import AsyncDNSResolver
 
-public actor EdgeDiscoveryClient: PeerDiscoveryMechanism {
+public actor EdgeDiscoveryClient: PeerDiscoveryMechanismProtocol {
     public struct Reference: Sendable {
         public static func any() -> Reference {
             Reference()
         }
     }
+    
     public struct Peer: Sendable, Hashable{
         public enum Host: Sendable, Hashable {
             public struct InternetHost: Sendable, Hashable {
@@ -20,7 +21,7 @@ public actor EdgeDiscoveryClient: PeerDiscoveryMechanism {
         internal let txt: [TXTRecord]
     }
     
-    private init() {}
+    fileprivate init() {}
     
     public static func withEdgeDiscovery<T: Sendable>(
         to nameserver: String,
@@ -64,6 +65,15 @@ public actor EdgeDiscoveryClient: PeerDiscoveryMechanism {
                 
                 try await handleResults(output.results)
             }
+        }
+    }
+}
+
+
+extension PeerDiscoveryMechanism where Mechanism == EdgeDiscoveryClient {
+    public static var mdns: PeerDiscoveryMechanism<EdgeDiscoveryClient> {
+        PeerDiscoveryMechanism { context in
+            EdgeDiscoveryClient()
         }
     }
 }

@@ -26,6 +26,7 @@ let package = Package(
         .package(url: "https://github.com/PureSwift/Bluetooth.git", from: "7.2.3"),
         .package(url: "https://github.com/PureSwift/GATT.git", from: "3.3.1"),
         // Public dependencies
+        .package(url: "https://github.com/swift-server/swift-service-lifecycle.git", from: "2.8.0"),
         .package(url: "https://github.com/apple/swift-http-types.git", from: "1.4.0"),
         .package(url: "https://github.com/apple/swift-async-algorithms.git", from: "1.0.0"),
         .package(url: "https://github.com/apple/swift-argument-parser", from: "1.4.0"),
@@ -53,6 +54,7 @@ let package = Package(
                 .product(name: "GATT", package: "GATT", condition: .when(platforms: [.macOS, .linux])),
                 .product(name: "DarwinGATT", package: "GATT", condition: .when(platforms: [.macOS])),
                 // Public dependencies
+                .product(name: "ServiceLifecycle", package: "swift-service-lifecycle"),
                 .product(name: "HTTPTypes", package: "swift-http-types"),
                 .product(name: "AsyncAlgorithms", package: "swift-async-algorithms"),
                 .product(name: "Logging", package: "swift-log"),

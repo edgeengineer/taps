@@ -3,77 +3,14 @@ import AsyncAlgorithms
 internal import NIOCore
 internal import NIOPosix
 import Logging
-
-public struct TCPServer<
-    InboundMessage: Sendable,
-    OutboundMessage: Sendable
->: ServerConnectionProtocol {
-    public typealias Client = TCPSocket<InboundMessage, OutboundMessage>
-    public typealias ConnectionError = any Error
-
-    private nonisolated let inbound: NIOAsyncChannelInboundStream<NIOAsyncChannel<InboundMessage, OutboundMessage>>
-
-    private init(inbound: NIOAsyncChannelInboundStream<NIOAsyncChannel<InboundMessage, OutboundMessage>>) {
-        self.inbound = inbound
-    }
-
-    internal static func withServer<T: Sendable>(
-        host: String,
-        port: Int,
-        parameters: TCPServerParameters,
-        context: TAPSContext,
-        protocolStack: ProtocolStack<_NetworkInputBytes, InboundMessage, OutboundMessage, _NetworkOutputBytes> = ProtocolStack(),
-        perform: @escaping @Sendable (TCPServer) async throws -> T
-    ) async throws -> T {
-        let server = try await ServerBootstrap(group: .singletonMultiThreadedEventLoopGroup)
-            .serverChannelOption(.backlog, value: parameters.backlog)
-            .serverChannelOption(.socketOption(.so_reuseaddr), value: 1)
-            .childChannelOption(.socketOption(.so_reuseaddr), value: 1)
-            .childChannelOption(.maxMessagesPerRead, value: 1)
-            .childChannelInitializer { channel in
-                do {
-                    try channel.pipeline.syncOperations.addHandlers(protocolStack.handlers())
-                    return channel.eventLoop.makeSucceededVoidFuture()
-                } catch {
-                    return channel.eventLoop.makeFailedFuture(error)
-                }
-            }
-            .bind(host: host, port: port) { client in
-                return client.eventLoop.submit {
-                    try NIOAsyncChannel<
-                        InboundMessage,
-                        OutboundMessage
-                    >(wrappingChannelSynchronously: client)
-                }
-            }
-
-        return try await server.executeThenClose { inbound in
-            return try await perform(TCPServer(inbound: inbound))
-        }
-    }
-    
-    public nonisolated func withEachClient(
-        _ acceptClient: @Sendable @escaping (Client) async throws(CancellationError) -> Void
-    ) async throws(ConnectionError) {
-        try await withThrowingDiscardingTaskGroup { group in
-            for try await client in inbound {
-                group.addTask {
-                    return try await client.executeThenClose { inbound, outbound in
-                        let socket = TCPSocket(inbound: inbound, outbound: outbound)
-                        return try await acceptClient(socket)
-                    }
-                }
-            }
-        }
-    }
-}
+import ServiceLifecycle
 
 /// TCP Client as proper with real SwiftNIO implementation
 @available(macOS 15.0, *)
 public struct TCPSocket<
     InboundMessage: Sendable,
     OutboundMessage: Sendable
->: ClientConnectionProtocol {
+>: DuplexClientProtocol {
     public typealias ConnectionError = any Error
     
     // Actor-isolated state
@@ -95,7 +32,7 @@ public struct TCPSocket<
     }
     
     public func run() async throws {
-        // TODO: Do we need to keep `run()` active in the background?
+        try await gracefulShutdown()
     }
     
     internal static func withClientConnection<T: Sendable>(

@@ -1,4 +1,4 @@
-public protocol PeerDiscoveryMechanism<Reference, Peer>: Sendable {
+public protocol PeerDiscoveryMechanismProtocol<Reference, Peer>: Sendable {
     associatedtype Reference: Sendable
     associatedtype Peer: Sendable
 
@@ -16,14 +16,21 @@ fileprivate actor Output<Peer: Sendable> {
     }
 }
 
-extension PeerDiscoveryMechanism {
+extension PeerDiscoveryMechanismProtocol {
     public func discover(_ reference: Reference) async throws -> [Peer] {
         let output = Output<Peer>()
-        try await withDiscovery(
-            of: reference,
-            pollingInterval: nil
-        ) { results in
-            await output.update(to: results)
+        do {
+            try await withDiscovery(
+                of: reference,
+                pollingInterval: .seconds(1)
+            ) { results in
+                await output.update(to: results)
+                if !results.isEmpty {
+                    throw CancellationError()
+                }
+            }
+        } catch is CancellationError {
+            // Cancellation is fine
         }
         return await output.peers
     }
@@ -37,5 +44,22 @@ public protocol InternetHost: Sendable {
 internal struct PeerDiscoveryError: Error {
     static func cannotResolve() -> PeerDiscoveryError {
         PeerDiscoveryError()
+    }
+}
+
+public struct PeerDiscoveryMechanism<Mechanism: PeerDiscoveryMechanismProtocol>: Sendable {
+    internal typealias MakeMechanism = @Sendable (TAPSContext) async throws -> Mechanism
+    let makeMechanism: MakeMechanism
+    
+    internal init(makeMechanism: @escaping MakeMechanism) {
+        self.makeMechanism = makeMechanism
+    }
+    
+    public func withMechanism<T>(
+        forContext context: TAPSContext,
+        perform: (inout Mechanism) async throws -> T
+    ) async throws -> T {
+        var mechanism = try await makeMechanism(context)
+        return try await perform(&mechanism)
     }
 }
