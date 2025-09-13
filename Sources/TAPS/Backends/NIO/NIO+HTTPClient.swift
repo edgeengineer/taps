@@ -30,7 +30,7 @@ internal extension ConnectionSubprotocol<
 
 /// TCP Client as proper with real SwiftNIO implementation
 @available(macOS 15.0, *)
-public actor HTTP1Client: ClientConnectionProtocol {
+public actor HTTP1Client: DuplexClientProtocol {
     public typealias InboundMessage = HTTPResponse
     public typealias OutboundMessage = HTTPRequest
     public struct ConnectionError: Error {}

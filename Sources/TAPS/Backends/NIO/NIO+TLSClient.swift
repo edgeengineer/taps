@@ -3,6 +3,7 @@ internal import NIOCore
 internal import NIOSSL
 internal import NIOPosix
 import Logging
+import ServiceLifecycle
 
 extension NIOSSLHandler {
     internal static func crashOnMisconfiguration(
@@ -50,7 +51,7 @@ internal extension ConnectionSubprotocol<
 public actor TLSClient<
     InboundMessage: Sendable,
     OutboundMessage: Sendable
->: ClientConnectionProtocol {
+>: DuplexClientProtocol {
     // TODO: Fix up for embedded
     public typealias ConnectionError = any Error
     
@@ -71,7 +72,7 @@ public actor TLSClient<
     }
     
     public func run() async throws {
-        // TODO: Keep task alive?
+        try await gracefulShutdown()
     }
     
     internal static func withConnection<T: Sendable>(

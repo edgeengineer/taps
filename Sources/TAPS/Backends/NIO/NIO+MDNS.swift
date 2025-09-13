@@ -1,6 +1,6 @@
 internal import AsyncDNSResolver
 
-public actor MDNSClient: PeerDiscoveryMechanism {
+public actor MDNSClient: PeerDiscoveryMechanismProtocol {
     public struct Reference: Sendable {
         internal enum Underlying: Sendable {
             case ptr(String)
@@ -22,7 +22,7 @@ public actor MDNSClient: PeerDiscoveryMechanism {
         public let port: Int
     }
     
-    private init() {}
+    fileprivate init() {}
     
     public static func withMDNS<T: Sendable>(
         perform: (MDNSClient) async throws -> T
@@ -36,7 +36,7 @@ public actor MDNSClient: PeerDiscoveryMechanism {
         return try await resolver.queryTXT(name: name)
     }
     
-    public nonisolated func discover(_ reference: Reference) async throws -> Peers {
+    internal nonisolated func discover(_ reference: Reference) async throws -> [Peer] {
         var peers = [Peer]()
         let resolver = try AsyncDNSResolver()
         
@@ -71,6 +71,31 @@ public actor MDNSClient: PeerDiscoveryMechanism {
             )
 
             return [peer]
+        }
+    }
+    
+    public func withDiscovery(
+        of reference: Reference,
+        pollingInterval: Duration? = .seconds(5),
+        handleResults: @Sendable ([Peer]) async throws -> Void
+    ) async throws {
+        while !Task.isCancelled {
+            let peers = try await discover(reference)
+            try await handleResults(peers)
+            
+            if let pollingInterval {
+                try await Task.sleep(for: pollingInterval)
+            } else {
+                return
+            }
+        }
+    }
+}
+
+extension PeerDiscoveryMechanism where Mechanism == MDNSClient {
+    public static var mdns: PeerDiscoveryMechanism<MDNSClient> {
+        PeerDiscoveryMechanism { context in
+            MDNSClient()
         }
     }
 }

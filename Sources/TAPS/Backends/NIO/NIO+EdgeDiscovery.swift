@@ -1,14 +1,15 @@
 internal import AsyncDNSResolver
 
-public actor EdgeDiscoveryClient: PeerDiscoveryMechanism {
+public actor EdgeDiscoveryClient: PeerDiscoveryMechanismProtocol {
     public struct Reference: Sendable {
         public static func any() -> Reference {
             Reference()
         }
     }
-    public struct Peer: Sendable {
-        public enum Host: Sendable {
-            public struct InternetHost: Sendable {
+    
+    public struct Peer: Sendable, Hashable{
+        public enum Host: Sendable, Hashable {
+            public struct InternetHost: Sendable, Hashable {
                 public let hostname: String
                 public let port: Int
             }
@@ -20,7 +21,7 @@ public actor EdgeDiscoveryClient: PeerDiscoveryMechanism {
         internal let txt: [TXTRecord]
     }
     
-    private init() {}
+    fileprivate init() {}
     
     public static func withEdgeDiscovery<T: Sendable>(
         to nameserver: String,
@@ -30,23 +31,49 @@ public actor EdgeDiscoveryClient: PeerDiscoveryMechanism {
         return try await perform(mdns)
     }
     
-    public nonisolated func discover(_ reference: Reference) async throws -> Peers {
-        // TODO: Bluetooth in parallel
-        try await MDNSClient.withMDNS { client in
-            let devices = try await client.discover(.ptr(to: "_edgeos._udp.local"))
-            var peers = [Peer]()
+    public nonisolated func withDiscovery(
+        of reference: Reference,
+        pollingInterval: Duration? = .seconds(5),
+        handleResults: @Sendable ([Peer]) async throws -> Void
+    ) async throws {
+        actor Output {
+            var results = [Peer]()
             
-            for device in devices {
-                let txt = try await client.discoverTXT(toHost: device.hostname)
-                peers.append(
-                    Peer(
-                        host: .internet(.init(hostname: device.hostname, port: device.port)),
-                        txt: txt
-                    )
-                )
+            func append(_ peer: Peer) {
+                self.results.append(peer)
             }
-            
-            return peers
+        }
+        
+        // TODO: Bluetooth in parallel
+        let output = Output()
+        try await MDNSClient.withMDNS { client in
+            try await client.withDiscovery(
+                of: .ptr(to: "_edgeos._udp.local"),
+                pollingInterval: pollingInterval
+            ) { devices in
+                nextDevice: for device in devices {
+                    let host = Peer.Host.internet(
+                        .init(hostname: device.hostname, port: device.port)
+                    )
+                    if await output.results.contains(where: { $0.host == host }) {
+                        continue nextDevice
+                    }
+                    
+                    let txt = try await client.discoverTXT(toHost: device.hostname)
+                    await output.append(Peer(host: host, txt: txt))
+                }
+                
+                try await handleResults(output.results)
+            }
+        }
+    }
+}
+
+
+extension PeerDiscoveryMechanism where Mechanism == EdgeDiscoveryClient {
+    public static var mdns: PeerDiscoveryMechanism<EdgeDiscoveryClient> {
+        PeerDiscoveryMechanism { context in
+            EdgeDiscoveryClient()
         }
     }
 }

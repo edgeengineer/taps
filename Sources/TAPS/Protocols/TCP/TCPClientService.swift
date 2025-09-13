@@ -6,12 +6,12 @@ public struct TCPClientService<
     public typealias Parameters = TCPClientParameters
     public typealias Client = TCPSocket<InboundMessage, OutboundMessage>
     
-    let resolve: @Sendable () async throws -> (host: String, port: Int)
+    let resolve: @Sendable (TAPSContext) async throws -> (host: String, port: Int)
     private let protocolStack: ProtocolStack<_NetworkInputBytes, InboundMessage, OutboundMessage, _NetworkOutputBytes>
     
-    public init(
+    internal init(
         protocolStack: ProtocolStack<NetworkInputBytes, InboundMessage, OutboundMessage, NetworkOutputBytes>,
-        resolve: @escaping @Sendable () async throws -> (host: String, port: Int)
+        resolve: @escaping @Sendable (TAPSContext) async throws -> (host: String, port: Int)
     ) {
         self.resolve = resolve
         self.protocolStack = ProtocolStack.unverified {
@@ -25,7 +25,7 @@ public struct TCPClientService<
         context: TAPSContext,
         perform: @escaping @Sendable (Client) async throws -> T
     ) async throws -> T {
-        let (host, port) = try await resolve()
+        let (host, port) = try await resolve(context)
         return try await Client.withClientConnection(
             host: host,
             port: port,
@@ -39,7 +39,7 @@ public struct TCPClientService<
 
 extension ClientServiceProtocol where Self == TCPClientService<NetworkInputBytes, NetworkOutputBytes> {
     public static func tcp(host: String, port: Int) -> TCPClientService<NetworkInputBytes, NetworkOutputBytes> {
-        TCPClientService(protocolStack: .init()) {
+        TCPClientService(protocolStack: .init()) { _ in
             return (host, port)
         }
     }
@@ -49,15 +49,17 @@ extension ClientServiceProtocol where Self == TCPClientService<NetworkInputBytes
         Peer: InternetHost
     >(
         to reference: Reference,
-        using mechanism: some PeerDiscoveryMechanism<Reference, Peer>
+        resolver: PeerDiscoveryMechanism<some PeerDiscoveryMechanismProtocol<Reference, Peer>>
     ) -> TCPClientService<NetworkInputBytes, NetworkOutputBytes> {
-        TCPClientService(protocolStack: .init()) {
-            let hosts = try await mechanism.discover(reference)
-            guard let host = hosts.first else {
-                throw PeerDiscoveryError.cannotResolve()
+        TCPClientService(protocolStack: .init()) { context in
+            try await resolver.withMechanism(forContext: context) { resolver in
+                let hosts = try await resolver.discover(reference)
+                guard let host = hosts.first else {
+                    throw PeerDiscoveryError.cannotResolve()
+                }
+                
+                return (host.hostname, host.port)
             }
-            
-            return (host.hostname, host.port)
         }
     }
 }

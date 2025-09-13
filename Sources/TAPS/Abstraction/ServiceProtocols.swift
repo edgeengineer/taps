@@ -2,11 +2,12 @@
 // RFC-compliant service protocols
 
 import AsyncAlgorithms
+import ServiceLifecycle
 
 /// Base protocol for client services
 public protocol ClientServiceProtocol: Sendable {
     associatedtype Parameters: Sendable
-    associatedtype Client: ClientConnectionProtocol
+    associatedtype Client: ServiceLifecycle.Service
     
     /// Create connection with given parameters
     func withConnection<T: Sendable>(
@@ -24,7 +25,7 @@ public protocol ParametersWithDefault: Sendable {
 /// Base protocol for server services
 public protocol ServerServiceProtocol: Sendable {
     associatedtype Parameters: Sendable
-    associatedtype Server: ServerConnectionProtocol
+    associatedtype Server: DuplexServerProtocol
     
     /// Create server with given parameters
     func withServer<T: Sendable>(
